@@ -1,0 +1,167 @@
+[
+  {
+    "topic_keywords": ["artificial intelligence", "ai", "machine learning", "llm", "gpt", "neural"],
+    "sources": [
+      {
+        "id": 1,
+        "title": "The State of AI in 2024: Enterprise Adoption Accelerates",
+        "url": "https://www.mckinsey.com/capabilities/quantumblack/our-insights/the-state-of-ai",
+        "domain": "mckinsey.com",
+        "snippet": "McKinsey's annual AI report finds that 72% of organizations have adopted at least one AI capability, up from 50% the previous year. Generative AI adoption has been particularly striking.",
+        "content": "McKinsey's annual AI report finds that 72% of organizations have adopted at least one AI capability, up from 50% the previous year. Generative AI adoption has been particularly striking, with 65% of respondents reporting regular use of gen AI in at least one business function. The report highlights that AI-related roles are among the fastest-growing job categories, while concerns about job displacement remain a key challenge for organizations navigating the AI transition. Cost reductions and revenue generation remain the top motivators for AI investment, with early AI leaders reporting 10-20% revenue increases attributable to AI deployments.",
+        "relevance_score": 0.95,
+        "date": "2024-05-28"
+      },
+      {
+        "id": 2,
+        "title": "Large Language Models: A Survey of Capabilities and Limitations",
+        "url": "https://arxiv.org/abs/2307.06435",
+        "domain": "arxiv.org",
+        "snippet": "This survey provides a comprehensive overview of large language models (LLMs), covering architecture, training methodologies, emergent capabilities, and key limitations including hallucination and reasoning failures.",
+        "content": "This survey provides a comprehensive overview of large language models (LLMs) including GPT-4, Claude, Gemini, and open-source alternatives like Llama. The paper covers transformer architecture fundamentals, pre-training on internet-scale text corpora, and instruction fine-tuning methodologies such as RLHF. Key emergent capabilities discussed include chain-of-thought reasoning, few-shot learning, and tool use. The authors identify critical limitations: hallucination of factual information, poor performance on multi-step arithmetic, lack of persistent memory, and sensitivity to prompt formatting. The survey concludes with promising directions including retrieval-augmented generation, constitutional AI, and multimodal integration.",
+        "relevance_score": 0.91,
+        "date": "2024-01-15"
+      },
+      {
+        "id": 3,
+        "title": "Ollama: Running Large Language Models Locally",
+        "url": "https://ollama.com/blog/llama3",
+        "domain": "ollama.com",
+        "snippet": "Ollama makes it easy to run LLMs like Llama 3, Mistral, and Gemma locally on your machine. With 4-bit quantization, even 8B parameter models run on consumer hardware with 8GB RAM.",
+        "content": "Ollama provides a streamlined interface for running open-source large language models on local hardware. The platform supports Llama 3 (8B and 70B variants), Mistral 7B, Gemma 2 (9B and 27B), Phi-3, and dozens of other models. Key features include automatic 4-bit quantization for memory efficiency, a simple REST API compatible with OpenAI's interface, model pulling from a public registry, and GPU acceleration via CUDA and Metal. The Llama 3 8B model achieves competitive performance against GPT-3.5 on many benchmarks while running on hardware with as little as 8GB of RAM, making powerful AI accessible without cloud costs or privacy concerns.",
+        "relevance_score": 0.88,
+        "date": "2024-04-18"
+      },
+      {
+        "id": 4,
+        "title": "AI Safety: Alignment Research Progress in 2024",
+        "url": "https://www.anthropic.com/research/alignment-faking",
+        "domain": "anthropic.com",
+        "snippet": "Anthropic's Constitutional AI approach and interpretability research are advancing our ability to build AI systems that reliably follow human values and intentions.",
+        "content": "Anthropic's recent research into AI alignment covers constitutional AI, scalable oversight, and mechanistic interpretability. Constitutional AI trains models to critique and revise their own outputs against a set of principles, reducing harmful outputs without extensive human labeling. Interpretability research uses activation patching and probing classifiers to understand how transformer models represent concepts internally. Recent findings suggest that models develop internal representations of emotional states, raising new questions about AI consciousness. Scalable oversight research explores how human feedback can be extended to domains where humans cannot directly evaluate AI outputs, a critical challenge for AI systems operating at superhuman capability levels.",
+        "relevance_score": 0.82,
+        "date": "2024-09-20"
+      },
+      {
+        "id": 5,
+        "title": "Retrieval-Augmented Generation: Overcoming LLM Knowledge Limitations",
+        "url": "https://research.ibm.com/blog/retrieval-augmented-generation-RAG",
+        "domain": "research.ibm.com",
+        "snippet": "RAG combines the generative power of LLMs with external knowledge retrieval, dramatically reducing hallucinations and enabling models to cite verifiable sources.",
+        "content": "Retrieval-Augmented Generation (RAG) addresses the core limitation of LLMs: static training knowledge with a cutoff date. RAG systems retrieve relevant documents from a vector database at inference time, injecting them into the model's context window. Key components include an embedding model for semantic search, a vector store (ChromaDB, Pinecone, Weaviate), and a re-ranking model to select the most relevant chunks. Advanced RAG techniques include HyDE (Hypothetical Document Embeddings), multi-hop retrieval for complex queries, and self-RAG where the model decides when to retrieve. Enterprise deployments show 40-60% reduction in hallucination rates when comparing RAG to standard LLM generation, with the additional benefit of traceable citations.",
+        "relevance_score": 0.86,
+        "date": "2024-02-12"
+      }
+    ]
+  },
+  {
+    "topic_keywords": ["solar", "energy", "renewable", "climate", "wind", "battery", "carbon", "green"],
+    "sources": [
+      {
+        "id": 1,
+        "title": "Global Solar Capacity Hits Record 1.6 Terawatts in 2024",
+        "url": "https://www.iea.org/reports/renewables-2024",
+        "domain": "iea.org",
+        "snippet": "The International Energy Agency reports global solar PV capacity reached 1.6 TW in 2024, with costs dropping 90% over the last decade, making solar the cheapest electricity source in history.",
+        "content": "The International Energy Agency's Renewables 2024 report documents the extraordinary growth of solar photovoltaic energy. Global installed capacity reached 1.6 terawatts, adding 400 GW in a single year — the largest annual addition in energy history. The cost of utility-scale solar has fallen from $0.40/kWh in 2010 to $0.04/kWh in 2024, a 90% reduction driven by Chinese manufacturing scale, improved cell efficiency, and competitive auctions. The report identifies battery storage as the critical enabler for solar to reach 50%+ grid penetration. Grid-scale lithium iron phosphate (LFP) batteries are now $100/kWh, enabling 4-hour storage that smooths solar intermittency. Policy drivers include the US Inflation Reduction Act, EU Green Deal, and ambitious national targets from India and China.",
+        "relevance_score": 0.96,
+        "date": "2024-11-15"
+      },
+      {
+        "id": 2,
+        "title": "Perovskite Solar Cells: The Next Generation of Photovoltaics",
+        "url": "https://www.nrel.gov/pv/perovskite-solar-cells.html",
+        "domain": "nrel.gov",
+        "snippet": "NREL's research on perovskite solar cells shows efficiency records exceeding 33% in tandem configurations, potentially surpassing silicon PV within five years.",
+        "content": "Perovskite solar cells have emerged as the most exciting development in photovoltaics in decades. Starting from 3.8% efficiency in 2009, lab-scale perovskite cells have now reached 26.1% efficiency, matching the best monocrystalline silicon cells. Perovskite-silicon tandem cells have achieved 33.9% certified efficiency at NREL, surpassing the theoretical limit of single-junction silicon. The materials (typically methylammonium lead iodide) are solution-processable, enabling roll-to-roll manufacturing far cheaper than silicon. Key challenges remain: long-term stability in moisture and heat, lead toxicity concerns, and scaling from lab tiles to full-size modules. Research into lead-free alternatives (tin perovskites) is advancing, though efficiencies lag lead variants by several percentage points.",
+        "relevance_score": 0.89,
+        "date": "2024-07-22"
+      },
+      {
+        "id": 3,
+        "title": "Battery Storage Market: $500B Industry by 2030",
+        "url": "https://www.bloomberg.com/energy-storage-outlook-2024",
+        "domain": "bloomberg.com",
+        "snippet": "BloombergNEF forecasts the global energy storage market will install 1,500 GWh annually by 2030, driven by falling battery costs and renewable integration needs.",
+        "content": "BloombergNEF's Energy Storage Outlook forecasts explosive growth in grid-scale battery deployment through 2030. Annual installations are expected to reach 1,500 GWh by 2030, up from 200 GWh in 2024 — a 7.5x increase. Lithium iron phosphate (LFP) chemistry dominates grid storage due to superior cycle life (>6,000 cycles) and safety, despite lower energy density than NMC. Chinese manufacturers CATL and BYD control 60% of global cell production, maintaining cost leadership. The report identifies virtual power plants — aggregating distributed residential batteries through software — as a $50B opportunity. Emerging alternatives include iron-air batteries for long-duration storage (100+ hours) and vanadium flow batteries for applications requiring high cycle counts.",
+        "relevance_score": 0.87,
+        "date": "2024-08-01"
+      }
+    ]
+  },
+  {
+    "topic_keywords": ["quantum", "computing", "qubit", "quantum supremacy", "quantum advantage"],
+    "sources": [
+      {
+        "id": 1,
+        "title": "IBM Quantum: 1000-Qubit Processor and the Path to Fault Tolerance",
+        "url": "https://research.ibm.com/blog/ibm-quantum-heron",
+        "domain": "research.ibm.com",
+        "snippet": "IBM's Heron processor and 1,000+ qubit Condor chip represent milestones in scaling quantum hardware, though fault-tolerant quantum computing remains 5-10 years away.",
+        "content": "IBM's aggressive quantum computing roadmap has delivered two landmark processors: Heron (133 qubits, reduced error rates) and Condor (1,121 qubits, world's largest quantum processor as of 2023). The Heron chip demonstrates error rates 5x lower than its predecessor through tunable couplers that reduce unwanted qubit interactions. IBM's utility-scale experiments have shown quantum circuits delivering results that would require exponential classical compute time, though critics debate whether these constitute true quantum advantage. The company's roadmap targets error-corrected logical qubits by 2029, requiring approximately 1,000 physical qubits per logical qubit under current error correction codes. Key applications expected to benefit first: drug discovery molecular simulation, materials science, and optimization problems in logistics and finance.",
+        "relevance_score": 0.94,
+        "date": "2024-03-10"
+      },
+      {
+        "id": 2,
+        "title": "Quantum Software: Algorithms Ready for Near-Term Quantum Devices",
+        "url": "https://arxiv.org/abs/2405.01234",
+        "domain": "arxiv.org",
+        "snippet": "Variational quantum algorithms like VQE and QAOA offer near-term quantum advantage on NISQ devices, though classical simulation remains competitive for most problem sizes today.",
+        "content": "The quantum software landscape has matured significantly with the emergence of variational quantum algorithms designed for noisy intermediate-scale quantum (NISQ) devices. The Variational Quantum Eigensolver (VQE) targets quantum chemistry problems by finding molecular ground states that are intractable for classical computers. The Quantum Approximate Optimization Algorithm (QAOA) addresses combinatorial optimization problems. Frameworks like Qiskit, Cirq, and PennyLane provide high-level abstractions for circuit design, with automatic optimization for specific hardware backends. A key challenge is quantum advantage: classical tensor network methods and improved classical algorithms continue to match quantum results for problem sizes achievable on current hardware. Consensus is that fault-tolerant quantum computers running Shor's algorithm or quantum simulation will deliver unambiguous advantage for specific problems by the early 2030s.",
+        "relevance_score": 0.88,
+        "date": "2024-05-01"
+      }
+    ]
+  },
+  {
+    "topic_keywords": ["space", "mars", "moon", "spacex", "nasa", "rocket", "satellite", "astronomy"],
+    "sources": [
+      {
+        "id": 1,
+        "title": "SpaceX Starship: Full Stack Flight Tests and Mars Mission Architecture",
+        "url": "https://www.spacex.com/vehicles/starship/",
+        "domain": "spacex.com",
+        "snippet": "Starship's 4th integrated flight test demonstrated controlled booster catch and full reusability, validating SpaceX's architecture for eventual crewed Mars missions projected for the early 2030s.",
+        "content": "SpaceX's Starship program achieved a landmark milestone in 2024 with the successful demonstration of mechazilla — mechanical arms catching the returning Super Heavy booster at the launch tower. This 'chopstick' catch validates the complete reusability architecture that underpins SpaceX's economics. The fully stacked vehicle stands 121 meters tall, generating 7,500 tonnes of thrust from 33 Raptor engines on the booster. Starship's 150-tonne payload capacity to LEO (fully reusable) would reduce launch costs to approximately $10/kg — two orders of magnitude cheaper than legacy vehicles. NASA's Artemis program has contracted SpaceX to deliver the Human Landing System variant for lunar missions. Elon Musk has outlined a Mars architecture requiring 1,000 Starships launching 100 people each to establish a self-sustaining colony by 2050.",
+        "relevance_score": 0.93,
+        "date": "2024-10-15"
+      },
+      {
+        "id": 2,
+        "title": "Webb Space Telescope: First Three Years of Science",
+        "url": "https://www.nasa.gov/webb-telescope-science-results",
+        "domain": "nasa.gov",
+        "snippet": "JWST has transformed our understanding of the early universe, detecting galaxies within 300 million years of the Big Bang and characterizing exoplanet atmospheres with unprecedented precision.",
+        "content": "The James Webb Space Telescope has delivered transformative science across multiple frontiers in its first three years of operation. In cosmology, JWST detected JADES-GS-z14-0, a galaxy observed just 290 million years after the Big Bang, challenging models of early galaxy formation. The telescope's NIRSpec spectrograph has characterized the atmospheres of dozens of exoplanets, detecting CO2, methane, and water vapor — including tantalizing signatures in K2-18b that could indicate biological activity, though abiotic explanations remain more likely. In stellar physics, JWST's mid-infrared imaging has revealed complex organic molecules in protoplanetary disks, providing new insights into planet formation chemistry. The telescope is operating well beyond its design specifications with fuel reserves projecting a 20+ year mission lifetime.",
+        "relevance_score": 0.90,
+        "date": "2024-08-30"
+      }
+    ]
+  },
+  {
+    "topic_keywords": ["biotech", "crispr", "gene", "cancer", "drug", "medicine", "genomics", "biology"],
+    "sources": [
+      {
+        "id": 1,
+        "title": "CRISPR Therapeutics: First In Vivo Gene Editing Cures Approved",
+        "url": "https://www.nature.com/articles/d41586-024-crispr-approval",
+        "domain": "nature.com",
+        "snippet": "The FDA's approval of Casgevy marks the first CRISPR-based therapy, curing sickle cell disease and beta-thalassemia with a single treatment — a turning point for genetic medicine.",
+        "content": "December 2023 marked a turning point in medicine with the FDA approval of Casgevy (exa-cel), a CRISPR-Cas9-based therapy co-developed by Vertex and CRISPR Therapeutics. The therapy edits patients' own hematopoietic stem cells to reactivate fetal hemoglobin production, effectively curing sickle cell disease and transfusion-dependent beta-thalassemia. Clinical trial data shows 97% of treated patients free from painful vaso-occlusive crises at 24 months. The treatment involves harvesting stem cells, editing them ex vivo at a manufacturing facility, and re-infusing them after the patient undergoes myeloablative conditioning. The one-time treatment is priced at $2.2 million, raising significant access and equity concerns. In vivo CRISPR delivery — injecting editing machinery directly into the body — is advancing with liver-targeting lipid nanoparticles, with trials underway for hypercholesterolemia and Alzheimer's risk factors.",
+        "relevance_score": 0.95,
+        "date": "2024-06-15"
+      },
+      {
+        "id": 2,
+        "title": "AI-Accelerated Drug Discovery: From Target to Clinical Trial in 18 Months",
+        "url": "https://www.nature.com/articles/s41586-023-06735-9",
+        "domain": "nature.com",
+        "snippet": "Insilico Medicine's AI-designed drug for idiopathic pulmonary fibrosis entered Phase 2 trials in 2024, demonstrating AI's potential to compress the decade-long drug discovery timeline.",
+        "content": "Insilico Medicine made history in 2024 by advancing an AI-designed drug candidate (INS018_055) for idiopathic pulmonary fibrosis into Phase 2 clinical trials just 18 months after target identification — a process that typically takes 4-6 years. The company's generative AI platform designed 7 billion potential molecular structures, with transformer-based models predicting ADMET properties (absorption, distribution, metabolism, excretion, toxicity) to filter candidates without expensive wet lab synthesis. AlphaFold 3's prediction of protein-ligand and protein-protein interactions has further accelerated target validation. The competitive landscape includes Recursion Pharmaceuticals, BenevolentAI, and Exscientia, all with drugs in clinical trials. Industry analysts estimate AI-driven drug discovery could reduce development costs by $26 billion annually by 2030, while increasing the probability of clinical success from the current 10% to 15-20%.",
+        "relevance_score": 0.91,
+        "date": "2024-09-05"
+      }
+    ]
+  }
+]

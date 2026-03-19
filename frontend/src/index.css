@@ -1,0 +1,118 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-gray-200;
+  }
+  body {
+    @apply bg-surface-50 text-gray-900 font-sans antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white font-semibold rounded-xl
+           hover:bg-primary-700 active:bg-primary-800 transition-all duration-150 shadow-sm
+           hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 px-4 py-2 bg-white text-gray-700 font-medium rounded-xl
+           border border-gray-200 hover:bg-gray-50 active:bg-gray-100 transition-all duration-150 shadow-sm;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 px-3 py-1.5 text-gray-600 font-medium rounded-lg
+           hover:bg-gray-100 active:bg-gray-200 transition-all duration-150;
+  }
+  .card {
+    @apply bg-white rounded-2xl border border-gray-100 shadow-sm;
+  }
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+  .badge-quick {
+    @apply badge bg-amber-100 text-amber-700;
+  }
+  .badge-standard {
+    @apply badge bg-primary-100 text-primary-700;
+  }
+  .badge-deep {
+    @apply badge bg-purple-100 text-purple-700;
+  }
+  .badge-complete {
+    @apply badge bg-emerald-100 text-emerald-700;
+  }
+  .badge-running {
+    @apply badge bg-blue-100 text-blue-700;
+  }
+  .badge-failed {
+    @apply badge bg-red-100 text-red-700;
+  }
+  .input-field {
+    @apply w-full px-4 py-3 rounded-xl border border-gray-200 bg-white text-gray-900
+           placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500
+           focus:border-transparent transition-all duration-150;
+  }
+  .section-label {
+    @apply text-xs font-semibold uppercase tracking-widest text-gray-400;
+  }
+  .nav-item {
+    @apply px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-100 
+           hover:text-gray-900 transition-all duration-150;
+  }
+  .nav-item-active {
+    @apply px-4 py-2 rounded-lg text-sm font-medium text-primary-700 bg-primary-50;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-gradient-to-r from-primary-600 to-purple-600 bg-clip-text text-transparent;
+  }
+  .shimmer-bg {
+    background: linear-gradient(90deg, #f0f0f8 25%, #e8e8f4 50%, #f0f0f8 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+}
+
+/* Streaming cursor blink */
+.stream-cursor::after {
+  content: '▍';
+  animation: blink 1s step-start infinite;
+  color: #6366f1;
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Markdown report styles */
+.report-content h1 { @apply text-3xl font-bold mb-4 mt-6 text-gray-900; }
+.report-content h2 { @apply text-2xl font-semibold mb-3 mt-8 pb-2 border-b border-gray-100 text-gray-800; }
+.report-content h3 { @apply text-lg font-semibold mb-2 mt-5 text-gray-800; }
+.report-content p  { @apply text-gray-700 leading-relaxed mb-4; }
+.report-content ul { @apply list-disc list-inside mb-4 space-y-1; }
+.report-content ol { @apply list-decimal list-inside mb-4 space-y-1; }
+.report-content li { @apply text-gray-700; }
+.report-content a  { @apply text-primary-600 underline underline-offset-2 hover:text-primary-700; }
+.report-content strong { @apply font-semibold text-gray-900; }
+.report-content em { @apply italic; }
+.report-content code { @apply bg-gray-100 text-sm px-1.5 py-0.5 rounded font-mono text-gray-800; }
+.report-content pre { @apply bg-gray-900 text-gray-100 rounded-xl p-4 overflow-x-auto mb-4; }
+.report-content blockquote { @apply border-l-4 border-primary-300 pl-4 italic text-gray-600 my-4; }
+.report-content table { @apply w-full border-collapse mb-4; }
+.report-content th { @apply bg-gray-50 font-semibold text-left p-2 border border-gray-200 text-sm; }
+.report-content td { @apply p-2 border border-gray-200 text-sm text-gray-700; }
+
+/* Scrollbar styles */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { @apply bg-transparent; }
+::-webkit-scrollbar-thumb { @apply bg-gray-300 rounded-full; }
+::-webkit-scrollbar-thumb:hover { @apply bg-gray-400; }
