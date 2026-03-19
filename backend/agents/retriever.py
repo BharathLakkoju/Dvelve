@@ -1,8 +1,11 @@
 import json
+import math
 import os
 import random
 from typing import List
 from models.schemas import SourceChunk, SubQuestion, RetrieverResult, ResearchDepth
+from services.web_retriever import search_web
+from services.vector_store import query_sources, store_sources
 
 MOCK_FIXTURES_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "mock_fixtures.json")
 
@@ -60,7 +63,7 @@ async def run_retriever(
     depth: ResearchDepth,
     offline_mode: bool,
 ) -> RetrieverResult:
-    """Returns sources. Always uses mock fixtures in offline mode."""
+    """Returns sources. Uses mock fixtures in offline mode; live web + vector memory otherwise."""
     depth_source_count = {
         ResearchDepth.quick: 5,
         ResearchDepth.standard: 8,
@@ -68,20 +71,49 @@ async def run_retriever(
     }
     target_count = depth_source_count[depth]
 
-    mock_sources = _find_matching_fixture(query)
+    # ── Offline mode: use pre-loaded mock fixtures ────────────────────────────
+    if offline_mode:
+        mock_sources = _find_matching_fixture(query)
+        if len(mock_sources) < target_count:
+            generic = _generate_generic_sources(query, target_count - len(mock_sources))
+            for i, s in enumerate(generic):
+                s.id = len(mock_sources) + i + 1
+            mock_sources.extend(generic)
+        sources = mock_sources[:target_count]
+        for s in sources:
+            s.relevance_score = min(1.0, s.relevance_score + random.uniform(-0.05, 0.05))
+        return RetrieverResult(sources=sources, total_sources=len(sources), cached_count=0)
 
-    # Pad with generic sources if needed
-    if len(mock_sources) < target_count:
-        generic = _generate_generic_sources(query, target_count - len(mock_sources))
-        # Re-index IDs
-        for i, s in enumerate(generic):
-            s.id = len(mock_sources) + i + 1
-        mock_sources.extend(generic)
+    # ── Phase 4: Query vector memory for semantically similar cached sources ──
+    cached_sources = await query_sources(query, max_results=target_count)
+    cached_count = len(cached_sources)
 
-    sources = mock_sources[:target_count]
+    # ── Phase 2: Fill remaining quota with live DuckDuckGo web retrieval ─────
+    web_sources: List[SourceChunk] = []
+    remaining = target_count - cached_count
+    if remaining > 0:
+        subqs_to_search = sub_questions[:3]  # search up to 3 sub-questions
+        per_query = math.ceil(remaining / max(len(subqs_to_search), 1))
 
-    # Simulate slight randomness in relevance scores
-    for s in sources:
-        s.relevance_score = min(1.0, s.relevance_score + random.uniform(-0.05, 0.05))
+        seen_urls = {s.url for s in cached_sources}
+        for sq in subqs_to_search:
+            results = await search_web(sq.search_query, max_results=per_query)
+            for s in results:
+                if s.url and s.url not in seen_urls:
+                    seen_urls.add(s.url)
+                    web_sources.append(s)
 
-    return RetrieverResult(sources=sources, total_sources=len(sources))
+    # ── Merge, trim, and re-index ─────────────────────────────────────────────
+    all_sources = (cached_sources + web_sources)[:target_count]
+    for i, s in enumerate(all_sources):
+        s.id = i + 1
+
+    # ── Phase 4: Persist new web sources into vector memory ───────────────────
+    if web_sources:
+        await store_sources(web_sources, query)
+
+    return RetrieverResult(
+        sources=all_sources,
+        total_sources=len(all_sources),
+        cached_count=cached_count,
+    )

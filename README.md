@@ -43,8 +43,33 @@ npm run dev
 | Export Markdown                                                   | ✅ MVP     |
 | Export PDF (requires WeasyPrint)                                  | ✅ MVP     |
 | Session history (SQLite)                                          | ✅ MVP     |
-| Live web retrieval (DuckDuckGo)                                   | 🔜 Phase 2 |
-| Vector memory (ChromaDB)                                          | 🔜 Phase 4 |
+| Live web retrieval (DuckDuckGo)                                   | ✅ Phase 2 |
+| Vector memory (ChromaDB)                                          | ✅ Phase 4 |
+
+---
+
+## � Live Web Retrieval (Phase 2)
+
+When **Offline Mode is OFF**, the Retriever agent performs real-time web searches using DuckDuckGo:
+
+- Each sub-question's search query is sent to DuckDuckGo via `AsyncDDGS`
+- Results are enriched by fetching the full page text with `httpx` + `BeautifulSoup`
+- Boilerplate (nav, footer, scripts) is stripped to keep only article content
+- Up to 3 sub-questions are searched concurrently to meet the depth quota
+- Falls back to mock fixtures if the network is unavailable
+
+---
+
+## 🧠 Vector Memory (Phase 4)
+
+All web-retrieved sources are stored in a local **ChromaDB** persistent vector database (`./chroma_db/`). On subsequent research sessions:
+
+1. The vector store is queried first for semantically similar cached sources
+2. Only the remaining quota is fetched fresh from the web
+3. New sources are upserted, continuously enriching the memory store
+4. The SSE `retriever` event reports `cached_count` so the UI can indicate memory hits
+
+ChromaDB uses a local ONNX embedding model (downloaded on first run, ~30 MB). No external API needed.
 
 ---
 
@@ -53,7 +78,7 @@ npm run dev
 ```
 backend/           ← FastAPI + 5 Python agents
 ├── agents/        ← planner, retriever, ranker, writer, critic
-├── services/      ← ollama.py (LLM), database.py (SQLite)
+├── services/      ← ollama.py, database.py (SQLite), web_retriever.py, vector_store.py
 ├── routers/       ← /api/research (SSE), /api/sessions, /api/models
 └── data/          ← mock_fixtures.json (5 pre-loaded topics)
 
@@ -96,4 +121,4 @@ Any other query auto-generates plausible academic-style sources.
 
 ---
 
-_Dvelve v1.0 · Built with FastAPI + React + Ollama · March 2026_
+_Dvelve v1.1 · Built with FastAPI + React + Ollama · Phase 2 + Phase 4 complete · March 2026_

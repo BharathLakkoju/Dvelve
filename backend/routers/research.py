@@ -41,7 +41,12 @@ async def research_event_generator(request: ResearchRequest, session_id: str):
             yield chunk
 
         # ── RETRIEVER ─────────────────────────────────────────
-        async for chunk in emit("status", {"message": "Retriever agent searching sources…", "agent": "retriever", "stage": "searching"}):
+        retriever_msg = (
+            "Retriever agent searching sources…"
+            if request.offline_mode
+            else "Retriever agent searching web & vector memory…"
+        )
+        async for chunk in emit("status", {"message": retriever_msg, "agent": "retriever", "stage": "searching"}):
             yield chunk
         await asyncio.sleep(0.8)
 
@@ -51,6 +56,7 @@ async def research_event_generator(request: ResearchRequest, session_id: str):
         async for chunk in emit("retriever", {
             "sources": [s.model_dump() for s in retriever_result.sources],
             "total_sources": retriever_result.total_sources,
+            "cached_count": retriever_result.cached_count,
             "status": "complete",
         }):
             yield chunk

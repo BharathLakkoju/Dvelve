@@ -42,6 +42,7 @@ class SourceChunk(BaseModel):
 class RetrieverResult(BaseModel):
     sources: List[SourceChunk]
     total_sources: int
+    cached_count: int = 0
 
 
 class RankerResult(BaseModel):
