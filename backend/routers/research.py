@@ -1,8 +1,11 @@
 import asyncio
 import json
+import logging
 from typing import Optional
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from models.schemas import ResearchRequest
 from agents.planner import run_planner
 from agents.retriever import run_retriever
@@ -13,6 +16,11 @@ from services.database import create_session, update_session
 from services.auth import get_current_user_optional
 
 router = APIRouter(prefix="/api", tags=["research"])
+logger = logging.getLogger(__name__)
+
+# FIX: Rate-limit research to prevent resource exhaustion by anonymous or
+# authenticated users. Running the full AI pipeline is expensive.
+limiter = Limiter(key_func=get_remote_address)
 
 
 async def research_event_generator(request: ResearchRequest, session_id: str):
@@ -123,21 +131,26 @@ async def research_event_generator(request: ResearchRequest, session_id: str):
             yield chunk
 
     except Exception as e:
+        # FIX: Log the full exception server-side; only send a generic error message
+        # to the client to prevent information disclosure (stack traces, paths, etc.).
+        logger.exception("Research pipeline error for session %s", session_id)
         await update_session(session_id, status="failed")
-        async for chunk in emit("error", {"message": str(e)}):
+        async for chunk in emit("error", {"message": "An internal error occurred. Please try again."}):
             yield chunk
 
 
 @router.post("/research")
+@limiter.limit("10/minute")
 async def start_research(
-    request: ResearchRequest,
+    request: Request,
+    body: ResearchRequest,
     current_user: Optional[dict] = Depends(get_current_user_optional),
 ):
     user_id = current_user["sub"] if current_user else None
-    session_id = await create_session(request.query, request.model, request.depth.value, user_id=user_id)
+    session_id = await create_session(body.query, body.model, body.depth.value, user_id=user_id)
 
     return StreamingResponse(
-        research_event_generator(request, session_id),
+        research_event_generator(body, session_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

@@ -1,7 +1,11 @@
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, field_validator
 from typing import Optional, List
 from datetime import datetime
 from enum import Enum
+import re
+
+# Allowlist of known-safe Ollama model identifiers (name:tag format).
+_ALLOWED_MODEL_PATTERN = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,99}$')
 
 
 class ResearchDepth(str, Enum):
@@ -12,9 +16,17 @@ class ResearchDepth(str, Enum):
 
 class ResearchRequest(BaseModel):
     query: str = Field(..., min_length=3, max_length=500)
-    model: str = Field(default="llama3:8b")
+    # FIX: validate model name against a safe pattern to prevent injection.
+    model: str = Field(default="llama3:8b", min_length=1, max_length=100)
     depth: ResearchDepth = Field(default=ResearchDepth.standard)
     offline_mode: bool = Field(default=True)
+
+    @field_validator('model')
+    @classmethod
+    def validate_model(cls, v: str) -> str:
+        if not _ALLOWED_MODEL_PATTERN.match(v):
+            raise ValueError('Invalid model name format')
+        return v
 
 
 class SubQuestion(BaseModel):
@@ -59,6 +71,7 @@ class CriticResult(BaseModel):
 
 class ResearchSession(BaseModel):
     id: str
+    user_id: Optional[str] = None  # Added for ownership checks
     query: str
     model: str
     depth: str
@@ -96,13 +109,17 @@ class SSEEvent(BaseModel):
 # ── Auth / User schemas ─────────────────────────────────────────────────────
 
 class UserRegister(BaseModel):
-    email: str = Field(..., min_length=5, max_length=255)
-    username: str = Field(..., min_length=2, max_length=50)
-    password: str = Field(..., min_length=6, max_length=128)
+    # FIX: Use EmailStr for proper email format validation.
+    email: EmailStr
+    # FIX: Restrict username to safe alphanumeric + underscore/hyphen characters.
+    username: str = Field(..., min_length=2, max_length=50, pattern=r'^[a-zA-Z0-9_\-]+$')
+    # FIX: Increased minimum password length from 6 to 8 characters.
+    password: str = Field(..., min_length=8, max_length=128)
 
 
 class UserLogin(BaseModel):
-    email: str
+    # FIX: Use EmailStr so invalid email formats are rejected before hitting the DB.
+    email: EmailStr
     password: str
 
 

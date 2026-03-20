@@ -1,11 +1,15 @@
 import aiosqlite
 import json
+import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from models.schemas import ResearchSession, SessionSummary, SourceChunk, UserResponse
 
-DB_PATH = "research_sessions.db"
+# FIX: Use an absolute path anchored to this file's directory so the DB
+# location is deterministic regardless of the server's working directory.
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "research_sessions.db")
+DB_PATH = os.path.normpath(DB_PATH)
 
 
 async def init_db():
@@ -49,7 +53,8 @@ async def init_db():
 
 async def create_user(email: str, username: str, hashed_password: str) -> Dict[str, Any]:
     user_id = str(uuid.uuid4())
-    now = datetime.utcnow().isoformat()
+    # FIX: Use timezone-aware datetime (utcnow() deprecated since Python 3.12).
+    now = datetime.now(timezone.utc).isoformat()
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             "INSERT INTO users (id, email, username, hashed_password, created_at) VALUES (?, ?, ?, ?, ?)",
@@ -83,7 +88,8 @@ async def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
 
 async def create_session(query: str, model: str, depth: str, user_id: Optional[str] = None) -> str:
     session_id = str(uuid.uuid4())
-    now = datetime.utcnow().isoformat()
+    # FIX: Use timezone-aware datetime (utcnow() deprecated since Python 3.12).
+    now = datetime.now(timezone.utc).isoformat()
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             """INSERT INTO sessions (id, user_id, query, model, depth, status, created_at)
@@ -101,7 +107,8 @@ async def update_session(
     sources: Optional[List[SourceChunk]] = None,
     critic_score: Optional[float] = None,
 ):
-    completed_at = datetime.utcnow().isoformat() if status == "complete" else None
+    # FIX: Use timezone-aware datetime (utcnow() deprecated since Python 3.12).
+    completed_at = datetime.now(timezone.utc).isoformat() if status == "complete" else None
     sources_json = (
         json.dumps([s.model_dump() for s in sources]) if sources else None
     )
@@ -160,6 +167,7 @@ async def get_session(session_id: str) -> Optional[ResearchSession]:
         sources = [SourceChunk(**s) for s in sources_data]
         return ResearchSession(
             id=row["id"],
+            user_id=row["user_id"],  # FIX: expose user_id for ownership checks
             query=row["query"],
             model=row["model"],
             depth=row["depth"],
@@ -178,7 +186,11 @@ async def delete_session(session_id: str):
         await db.commit()
 
 
-async def delete_all_sessions():
+# FIX: Scoped deletion — only removes sessions belonging to the given user.
+async def delete_user_sessions(user_id: str):
     async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("DELETE FROM sessions")
+        await db.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
         await db.commit()
+
+# NOTE: delete_all_sessions() was removed — it was a footgun with no live route
+# that would have wiped every user's data if ever accidentally re-exposed.

@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
 
 export interface User {
   id: string
@@ -196,6 +196,10 @@ export const useStore = create<AppState>()(
     }),
     {
       name: 'research-agent-storage',
+      // FIX: Use sessionStorage instead of the default localStorage so the JWT
+      // token is not persisted to disk and is only available for the current
+      // browser session. This limits the exposure window if an XSS attack occurs.
+      storage: createJSONStorage(() => sessionStorage),
       partialize: (state) => ({
         selectedModel: state.selectedModel,
         depth: state.depth,

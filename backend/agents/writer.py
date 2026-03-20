@@ -64,18 +64,26 @@ def _mock_report(query: str, sub_questions: List[SubQuestion], sources: List[Sou
     # Sections for each sub-question
     for i, sq in enumerate(sub_questions):
         sections.append(f"## {sq.question}\n")
-        src_idx = i % len(sources)
-        src = sources[src_idx]
-        next_src = sources[(src_idx + 1) % len(sources)] if len(sources) > 1 else src
-
-        sections.append(
-            f"{src.snippet} [{src.id}]\n\n"
-            f"Further research from {next_src.domain} indicates: {next_src.snippet} [{next_src.id}]\n\n"
-            f"**Key Points:**\n"
-            f"- Significant developments have been observed in this area\n"
-            f"- Multiple stakeholders are actively engaged in advancing the field\n"
-            f"- Data indicates growing momentum and investment\n"
-        )
+        if sources:
+            src_idx = i % len(sources)
+            src = sources[src_idx]
+            next_src = sources[(src_idx + 1) % len(sources)] if len(sources) > 1 else src
+            sections.append(
+                f"{src.snippet} [{src.id}]\n\n"
+                f"Further research from {next_src.domain} indicates: {next_src.snippet} [{next_src.id}]\n\n"
+                f"**Key Points:**\n"
+                f"- Significant developments have been observed in this area\n"
+                f"- Multiple stakeholders are actively engaged in advancing the field\n"
+                f"- Data indicates growing momentum and investment\n"
+            )
+        else:
+            sections.append(
+                f"This section addresses the question: *{sq.question}*\n\n"
+                f"Based on available knowledge, this is an active area of research with significant implications.\n"
+                f"**Key Points:**\n"
+                f"- Significant developments have been observed in this area\n"
+                f"- Multiple stakeholders are actively engaged in advancing the field\n"
+            )
 
     # Conclusions
     sections.append("## Conclusions\n")
@@ -109,11 +117,15 @@ async def run_writer_stream(
             available = await ollama_service.is_available()
             if available:
                 prompt = _build_writer_prompt(query, sub_questions, sources)
+                token_count = 0
                 async for token in ollama_service.generate_stream(
                     model, prompt, system=WRITER_SYSTEM
                 ):
+                    token_count += 1
                     yield token
-                return
+                if token_count > 0:
+                    return
+                # Ollama returned no tokens — fall through to mock
         except Exception:
             pass
 

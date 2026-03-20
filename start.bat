@@ -12,6 +12,6 @@ echo ========================================
 echo  Dvelve is starting up!
 echo  Frontend: http://localhost:5173
 echo  Backend API: http://localhost:8000
-echo  API Docs: http://localhost:8000/docs
+echo  (API docs disabled — set ENABLE_API_DOCS=true in .env to enable)
 echo ========================================
 start "" http://localhost:5173

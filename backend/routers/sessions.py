@@ -1,12 +1,59 @@
+import re
+import logging
+from urllib.parse import urlparse
 from fastapi import APIRouter, HTTPException, Depends
-from fastapi.responses import StreamingResponse, Response
-from services.database import get_sessions, get_session, delete_session, delete_all_sessions
+from fastapi.responses import Response
+from services.database import get_sessions, get_session, delete_session, delete_user_sessions
 from services.ollama import ollama_service
 from services.auth import get_current_user
 import json
 
 router = APIRouter(prefix="/api", tags=["sessions"])
+logger = logging.getLogger(__name__)
 
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _safe_filename(text: str, ext: str) -> str:
+    """Return a sanitized filename safe for use in a Content-Disposition header.
+    
+    FIX: Strips all characters that could inject into the HTTP header value
+    (quotes, CR, LF, semicolons, etc.).  Only alphanumerics, hyphens, and
+    underscores are allowed.
+    """
+    safe = re.sub(r'[^\w\-]', '_', text[:50], flags=re.ASCII)
+    safe = safe.strip('_') or "report"
+    return safe + ext
+
+
+def _validate_ollama_url(url: str) -> str:
+    """FIX: Guard against SSRF by only allowing localhost/loopback targets.
+    
+    Raises HTTPException(400) for any URL that could reach an internal or
+    external host.
+    """
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid URL format")
+
+    if parsed.scheme not in ("http", "https"):
+        raise HTTPException(status_code=400, detail="Only http/https URLs are permitted")
+
+    hostname = (parsed.hostname or "").lower()
+    allowed_hosts = {"localhost", "127.0.0.1", "::1"}
+    if hostname not in allowed_hosts:
+        raise HTTPException(
+            status_code=400,
+            detail="Only localhost URLs are allowed for Ollama connection testing",
+        )
+    return url
+
+
+# ---------------------------------------------------------------------------
+# Session routes
+# ---------------------------------------------------------------------------
 
 @router.get("/sessions")
 async def list_sessions(current_user: dict = Depends(get_current_user)):
@@ -19,20 +66,34 @@ async def get_session_detail(session_id: str, current_user: dict = Depends(get_c
     session = await get_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+    # FIX: Enforce ownership — users may only read their own sessions (BOLA/IDOR fix).
+    if session.user_id != current_user["sub"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
     return session.model_dump()
 
 
 @router.delete("/sessions/{session_id}")
 async def remove_session(session_id: str, current_user: dict = Depends(get_current_user)):
+    session = await get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    # FIX: Enforce ownership — users may only delete their own sessions (BOLA/IDOR fix).
+    if session.user_id != current_user["sub"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
     await delete_session(session_id)
     return {"status": "deleted"}
 
 
 @router.delete("/sessions")
-async def clear_all_sessions(current_user: dict = Depends(get_current_user)):
-    await delete_all_sessions()
+async def clear_user_sessions(current_user: dict = Depends(get_current_user)):
+    # FIX: Only delete sessions belonging to the authenticated user, not all users.
+    await delete_user_sessions(current_user["sub"])
     return {"status": "all sessions deleted"}
 
+
+# ---------------------------------------------------------------------------
+# Ollama / model routes
+# ---------------------------------------------------------------------------
 
 @router.get("/models")
 async def list_models():
@@ -48,7 +109,9 @@ async def ollama_status():
 
 @router.post("/ollama/test")
 async def test_ollama_connection(body: dict):
-    url = body.get("url", "http://localhost:11434")
+    # FIX: Validate the caller-supplied URL to prevent SSRF.
+    raw_url = body.get("url", "http://localhost:11434")
+    url = _validate_ollama_url(raw_url)
     from services.ollama import OllamaService
     svc = OllamaService(base_url=url)
     available = await svc.is_available()
@@ -56,24 +119,35 @@ async def test_ollama_connection(body: dict):
     return {"available": available, "models": models}
 
 
+# ---------------------------------------------------------------------------
+# Export routes — FIX: require authentication and ownership check
+# ---------------------------------------------------------------------------
+
 @router.get("/sessions/{session_id}/export/markdown")
-async def export_markdown(session_id: str):
+async def export_markdown(session_id: str, current_user: dict = Depends(get_current_user)):
     session = await get_session(session_id)
     if not session or not session.report_markdown:
         raise HTTPException(status_code=404, detail="Report not found")
-    filename = session.query[:40].replace(" ", "_").replace("/", "_") + ".md"
+    # FIX: Enforce ownership before serving the file.
+    if session.user_id != current_user["sub"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    # FIX: Sanitize filename to prevent HTTP header injection.
+    filename = _safe_filename(session.query, ".md")
     return Response(
         content=session.report_markdown,
         media_type="text/markdown",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f"attachment; filename=\"{filename}\""},
     )
 
 
 @router.get("/sessions/{session_id}/export/pdf")
-async def export_pdf(session_id: str):
+async def export_pdf(session_id: str, current_user: dict = Depends(get_current_user)):
     session = await get_session(session_id)
     if not session or not session.report_markdown:
         raise HTTPException(status_code=404, detail="Report not found")
+    # FIX: Enforce ownership before serving the file.
+    if session.user_id != current_user["sub"]:
+        raise HTTPException(status_code=403, detail="Not authorized")
     try:
         import markdown as md_lib
         import weasyprint
@@ -97,11 +171,12 @@ async def export_pdf(session_id: str):
 </head><body>{html_body}</body></html>"""
 
         pdf_bytes = weasyprint.HTML(string=html).write_pdf()
-        filename = session.query[:40].replace(" ", "_") + ".pdf"
+        # FIX: Sanitize filename to prevent HTTP header injection.
+        filename = _safe_filename(session.query, ".pdf")
         return Response(
             content=pdf_bytes,
             media_type="application/pdf",
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+            headers={"Content-Disposition": f"attachment; filename=\"{filename}\""},
         )
     except ImportError:
         raise HTTPException(

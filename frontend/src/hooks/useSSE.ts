@@ -125,8 +125,11 @@ export function useSSE() {
         if (payload.session_id) {
           setCurrentSessionId(payload.session_id)
         }
-        // Fetch updated sessions list
-        fetch('http://localhost:8000/api/sessions')
+        // Fetch updated sessions list with auth headers
+        const token = useStore.getState().token
+        fetch('http://localhost:8000/api/sessions', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        })
           .then((r) => r.json())
           .then((sessions) => useStore.getState().setSessions(sessions))
           .catch(() => {})
