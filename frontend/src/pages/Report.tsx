@@ -5,18 +5,21 @@ import remarkGfm from 'remark-gfm'
 import {
   FileText, Download, Share2, Bookmark,
   ExternalLink, MessageSquare, Zap, Clock,
-  Globe, ChevronRight, ArrowLeft, Telescope, Layers
+  Globe, ChevronRight, ArrowLeft,
+  Wifi, WifiOff, AlertTriangle
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
+import type { LlmProvider } from '../store/useStore'
 import { useSSE } from '../hooks/useSSE'
 import { api } from '../lib/api'
+import { PROVIDER_LABELS, PROVIDER_TEXT_CLASS } from '../lib/provider'
 import clsx from 'clsx'
 
 export function Report() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const {
-    reportMarkdown, sources, criticResult, sessions,
+    reportMarkdown, sources, criticResult, sessions, currentSessionId,
     startResearch, selectedModel, depth, offlineMode,
   } = useStore()
   const { startStream } = useSSE()
@@ -32,11 +35,15 @@ export function Report() {
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   const [loadError, setLoadError] = useState(false)
+  // Only trust the live Zustand state (populated by the just-finished SSE run)
+  // when it actually belongs to the session being viewed — otherwise a stale
+  // report from a previous run would be shown under a different session's title.
+  const isLiveSession = currentSessionId === id
 
   useEffect(() => {
     if (id) {
       // Try store first (just finished), then fetch from API
-      if (reportMarkdown && sources.length > 0) {
+      if (isLiveSession && reportMarkdown && sources.length > 0) {
         setReport(reportMarkdown)
         setSourcesData(sources)
         const found = sessions.find(s => s.id === id)
@@ -219,10 +226,30 @@ export function Report() {
               <Zap className="w-3.5 h-3.5" />
               {readTime} min read
             </span>
+            {session?.llm_provider && (
+              <span className={clsx('flex items-center gap-1 font-semibold', PROVIDER_TEXT_CLASS[session.llm_provider as LlmProvider])}>
+                {session.llm_provider === 'openrouter' ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
+                {PROVIDER_LABELS[session.llm_provider as LlmProvider]}
+              </span>
+            )}
           </div>
 
+          {/* Failed session banner */}
+          {session?.status === 'failed' && (
+            <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4 mb-8">
+              <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-red-700">Report generation failed</p>
+                <p className="text-xs text-red-600 mt-1 leading-relaxed">
+                  The Writer agent could not produce a report for this session (likely an unreachable or missing
+                  Ollama model). No quality score was generated. You can try running this research again.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Report markdown */}
-          {report ? (
+          {report && session?.status !== 'failed' ? (
             <div className="report-content" onMouseUp={handleMouseUp}>
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
@@ -252,7 +279,7 @@ export function Report() {
                   .trimStart()}
               </ReactMarkdown>
             </div>
-          ) : session?.status === 'complete' || loadError ? (
+          ) : session?.status === 'complete' || session?.status === 'failed' || loadError ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <FileText className="w-12 h-12 text-gray-200 mx-auto mb-3" />
               <p className="text-gray-500 font-medium">Report content unavailable</p>
@@ -306,11 +333,13 @@ export function Report() {
         </div>
 
         {/* Critic score */}
-        {criticResult && (
+        {session?.status !== 'failed' && (isLiveSession ? criticResult?.quality_score : session?.critic_score) != null && (
           <div className="mx-3 mb-3 p-3 bg-emerald-50 rounded-xl border border-emerald-100 shrink-0">
             <p className="text-xs font-semibold text-emerald-700 mb-1">Quality Score</p>
             <div className="flex items-center gap-2">
-              <div className="text-2xl font-bold text-emerald-600">{criticResult.quality_score}</div>
+              <div className="text-2xl font-bold text-emerald-600">
+                {isLiveSession ? criticResult?.quality_score : session?.critic_score}
+              </div>
               <div className="text-xs text-emerald-500">/10</div>
             </div>
           </div>

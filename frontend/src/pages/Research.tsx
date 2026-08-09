@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   CheckCircle, Circle, Loader2, XCircle,
   Globe, Bot, X, ExternalLink, Sparkles,
-  ChevronRight
+  ChevronRight, Wifi, WifiOff, AlertTriangle
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import type { AgentStatus } from '../store/useStore'
@@ -39,12 +39,18 @@ function AgentStatusLabel({ status }: { status: AgentStatus }) {
   }
 }
 
+const PROVIDER_META = {
+  mock: { label: 'Offline · Mock Data', dotClass: 'bg-amber-400', badgeClass: 'text-amber-700 bg-amber-50 border-amber-200', Icon: WifiOff },
+  ollama: { label: 'Offline · Local Ollama', dotClass: 'bg-emerald-400', badgeClass: 'text-emerald-700 bg-emerald-50 border-emerald-200', Icon: Wifi },
+  openrouter: { label: 'Online · OpenRouter Cloud', dotClass: 'bg-sky-400', badgeClass: 'text-sky-700 bg-sky-50 border-sky-200', Icon: Wifi },
+} as const
+
 export function Research() {
   const navigate = useNavigate()
   const {
     currentQuery, subQuestions, sources, agentStates,
     currentAgentMessage, progress, isResearching,
-    currentSessionId, criticResult,
+    currentSessionId, criticResult, llmProvider, researchError,
   } = useStore()
 
   useEffect(() => {
@@ -54,6 +60,10 @@ export function Research() {
   }, [currentQuery, navigate])
 
   const isComplete = agentStates.critic === 'complete'
+  const hasError = !!researchError
+  // llmProvider is null until the backend confirms the mode via the first
+  // status event ("mock" | "ollama" | "openrouter").
+  const providerMeta = llmProvider ? PROVIDER_META[llmProvider] : null
 
   const handleViewReport = () => {
     if (currentSessionId) navigate(`/report/${currentSessionId}`)
@@ -73,7 +83,21 @@ export function Research() {
           <p className="text-sm font-semibold text-gray-800 mt-0.5 max-w-xl truncate">{currentQuery}</p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium">
+          {providerMeta && (
+            <div className={clsx(
+              'flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border',
+              providerMeta.badgeClass
+            )}>
+              <providerMeta.Icon className="w-3.5 h-3.5" />
+              <span>{providerMeta.label}</span>
+            </div>
+          )}
+          {/* Model name is only meaningful for local Ollama — OpenRouter always
+              uses the server-configured model, ignoring the client's selection. */}
+          <div className={clsx(
+            'items-center gap-1.5 text-xs text-gray-500 font-medium',
+            llmProvider === 'openrouter' ? 'hidden' : 'flex'
+          )}>
             <Bot className="w-3.5 h-3.5 text-primary-400" />
             <span>{useStore.getState().selectedModel}</span>
           </div>
@@ -83,7 +107,7 @@ export function Research() {
             </button>
           ) : (
             <button onClick={handleStop} className="btn-secondary text-sm text-red-600 border-red-200 hover:bg-red-50">
-              <X className="w-4 h-4" /> Stop Research
+              <X className="w-4 h-4" /> {hasError ? 'Back to Dashboard' : 'Stop Research'}
             </button>
           )}
         </div>
@@ -133,8 +157,10 @@ export function Research() {
           {/* Status bar */}
           <div className="p-3 border-t border-gray-100 shrink-0">
             <div className="flex items-center gap-2 mb-2">
-              <div className={clsx('w-2 h-2 rounded-full', isComplete ? 'bg-emerald-400' : 'bg-blue-400 animate-pulse')} />
-              <span className="text-xs text-gray-500">{isComplete ? 'Complete' : 'System Online'}</span>
+              <div className={clsx('w-2 h-2 rounded-full', hasError ? 'bg-red-400' : isComplete ? 'bg-emerald-400' : 'bg-blue-400 animate-pulse')} />
+              <span className="text-xs text-gray-500">
+                {hasError ? 'Failed' : isComplete ? 'Complete' : providerMeta ? providerMeta.label : 'Connecting…'}
+              </span>
             </div>
             <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
               <div
@@ -173,8 +199,19 @@ export function Research() {
               </div>
             ))}
 
+            {/* Error banner */}
+            {hasError && (
+              <div className="bg-red-50 rounded-xl border border-red-200 p-4 animate-fade-in flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-red-700">Research failed</p>
+                  <p className="text-xs text-red-600 mt-1 leading-relaxed">{researchError}</p>
+                </div>
+              </div>
+            )}
+
             {/* Thinking activity */}
-            {isResearching && !isComplete && (
+            {isResearching && !isComplete && !hasError && (
               <div className="bg-white rounded-xl border border-primary-100 p-4 shadow-sm animate-fade-in flex items-start gap-3">
                 <div className="w-8 h-8 rounded-lg bg-primary-100 flex items-center justify-center shrink-0">
                   <Loader2 className="w-4 h-4 text-primary-500 animate-spin" />
@@ -219,12 +256,12 @@ export function Research() {
           </div>
 
           {/* Est. completion */}
-          {!isComplete && (
+          {!isComplete && !hasError && (
             <div className="px-6 py-2 border-t border-gray-100 bg-white shrink-0 flex items-center justify-between text-xs text-gray-400">
               <div className="flex items-center gap-3">
                 <span className="flex items-center gap-1">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  System Online
+                  <div className={clsx('w-1.5 h-1.5 rounded-full', providerMeta ? providerMeta.dotClass : 'bg-gray-300 animate-pulse')} />
+                  {providerMeta ? providerMeta.label : 'Connecting…'}
                 </span>
               </div>
               <span>Progress: {Math.round(progress)}%</span>

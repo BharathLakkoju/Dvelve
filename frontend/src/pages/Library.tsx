@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import {
   Library as LibraryIcon, Search, Grid, List,
   ArrowRight, Atom, Leaf, Bot, Rocket, Dna, Beaker,
-  Trash2, Clock
+  Trash2, Clock, Wifi, WifiOff, AlertTriangle
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
+import type { LlmProvider } from '../store/useStore'
 import { api } from '../lib/api'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
+import { PROVIDER_LABELS, PROVIDER_TEXT_CLASS } from '../lib/provider'
 import clsx from 'clsx'
 
 const TOPIC_COLORS: Record<string, string> = {
@@ -26,6 +28,16 @@ const TOPIC_ICON_COLORS: Record<string, string> = {
   'AI': 'text-blue-400',
   'Space': 'text-indigo-400',
   'CRISPR': 'text-pink-400',
+}
+
+function ModeBadge({ llmProvider }: { llmProvider?: LlmProvider | null }) {
+  if (!llmProvider) return null
+  const Icon = llmProvider === 'openrouter' ? Wifi : WifiOff
+  return (
+    <span className={clsx('flex items-center gap-1 text-xs', PROVIDER_TEXT_CLASS[llmProvider])} title={PROVIDER_LABELS[llmProvider]}>
+      <Icon className="w-3 h-3" /> {llmProvider === 'mock' ? 'Mock' : llmProvider === 'ollama' ? 'Ollama' : 'OpenRouter'}
+    </span>
+  )
 }
 
 export function Library() {
@@ -181,8 +193,16 @@ export function Library() {
                   <span className="text-xs text-gray-400">{formatDate(session.created_at)}</span>
                 </div>
                 <p className="text-sm font-semibold text-gray-800 line-clamp-2 mb-2">{session.query}</p>
+                {session.status === 'failed' && (
+                  <span className="flex items-center gap-1 text-xs font-semibold text-red-600 mb-2">
+                    <AlertTriangle className="w-3 h-3" /> Failed
+                  </span>
+                )}
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-400">{session.source_count} sources</span>
+                  <ModeBadge llmProvider={session.llm_provider as LlmProvider} />
+                </div>
+                <div className="flex items-center justify-end mt-1">
                   <span className="text-xs font-semibold text-primary-600 group-hover:underline flex items-center gap-0.5">OPEN <ArrowRight className="w-3 h-3" /></span>
                 </div>
               </div>
@@ -210,14 +230,19 @@ export function Library() {
                     <Clock className="w-3 h-3" /> {formatDate(session.created_at)}
                   </span>
                   <span className="text-xs text-gray-400">{session.source_count} sources</span>
+                  <ModeBadge llmProvider={session.llm_provider as LlmProvider} />
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {session.critic_score && (
+                {session.status === 'failed' ? (
+                  <span className="flex items-center gap-1 text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
+                    <AlertTriangle className="w-3 h-3" /> Failed
+                  </span>
+                ) : session.critic_score ? (
                   <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
                     {session.critic_score}/10
                   </span>
-                )}
+                ) : null}
                 <button onClick={(e) => handleDelete(e, session.id)} className="btn-ghost text-red-400 hover:text-red-500 opacity-0 group-hover:opacity-100">
                   <Trash2 className="w-4 h-4" />
                 </button>

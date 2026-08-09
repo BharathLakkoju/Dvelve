@@ -56,7 +56,12 @@ class OllamaService:
                     f"{self.base_url}/api/generate", json=payload
                 )
                 r.raise_for_status()
-                return r.json().get("response", "")
+                data = r.json()
+                if "error" in data:
+                    raise RuntimeError(data["error"])
+                return data.get("response", "")
+        except RuntimeError:
+            raise
         except Exception as e:
             raise RuntimeError(f"Ollama generate failed: {e}")
 
@@ -84,6 +89,8 @@ class OllamaService:
                     if line.strip():
                         try:
                             chunk = json.loads(line)
+                            if "error" in chunk:
+                                raise RuntimeError(chunk["error"])
                             token = chunk.get("response", "")
                             if token:
                                 yield token

@@ -3,6 +3,7 @@ import re
 from typing import List
 from models.schemas import SubQuestion, PlannerResult, ResearchDepth
 from services.ollama import ollama_service
+from services.openrouter import openrouter_service
 
 DEPTH_QUESTION_COUNT = {
     ResearchDepth.quick: 3,
@@ -53,22 +54,29 @@ async def run_planner(
     query: str,
     model: str,
     depth: ResearchDepth,
-    offline_mode: bool,
+    llm_provider: str = "mock",
 ) -> PlannerResult:
-    if offline_mode:
+    """llm_provider is one of "mock" | "ollama" | "openrouter" — resolved once
+    per request by routers/research.py. "ollama" (local/offline) gracefully
+    falls back to mock on any failure, preserving the always-works-offline
+    guarantee. "openrouter" (online/cloud) does the same for the planner
+    specifically, since a bad plan is recoverable — only the Writer's failure
+    is treated as fatal (see writer.py)."""
+    if llm_provider == "mock":
         return _mock_planner(query, depth)
 
+    service = ollama_service if llm_provider == "ollama" else openrouter_service
     count = DEPTH_QUESTION_COUNT[depth]
     prompt = f"""Research topic: "{query}"
 
 Generate exactly {count} focused sub-questions and search queries for this topic."""
 
     try:
-        available = await ollama_service.is_available()
+        available = await service.is_available()
         if not available:
             return _mock_planner(query, depth)
 
-        raw = await ollama_service.generate(model, prompt, system=PLANNER_SYSTEM)
+        raw = await service.generate(model, prompt, system=PLANNER_SYSTEM)
         # Extract JSON from response
         match = re.search(r'\{[\s\S]*\}', raw)
         if match:

@@ -48,15 +48,15 @@ npm run dev
 
 ---
 
-## � Live Web Retrieval (Phase 2)
+## 🌐 Live Web Retrieval (Phase 2)
 
-When **Offline Mode is OFF**, the Retriever agent performs real-time web searches using DuckDuckGo:
+When **Offline Mode is OFF** (online), the Retriever agent performs real-time web searches using DuckDuckGo:
 
 - Each sub-question's search query is sent to DuckDuckGo via `AsyncDDGS`
 - Results are enriched by fetching the full page text with `httpx` + `BeautifulSoup`
 - Boilerplate (nav, footer, scripts) is stripped to keep only article content
 - Up to 3 sub-questions are searched concurrently to meet the depth quota
-- Falls back to mock fixtures if the network is unavailable
+- If the network/DuckDuckGo is unavailable, online mode simply returns fewer (or zero) sources rather than substituting mock fixtures — online mode never silently shows fake data
 
 ---
 
@@ -104,13 +104,14 @@ Any other query auto-generates plausible academic-style sources.
 
 ---
 
-## 🔧 Connecting Ollama
+## 🔧 Two Modes: Local Ollama vs. Cloud OpenRouter
 
-1. Install [Ollama](https://ollama.com) and pull a model: `ollama pull llama3:8b`
-2. Go to **Settings** in the app
-3. Enter your Ollama URL (`http://localhost:11434`)
-4. Click **Test Connection**
-5. Toggle **Offline Mode OFF** to use live Ollama inference
+Dvelve has two modes, both fully functional:
+
+- **Offline Mode (ON)** — local-first. Retrieval always uses curated mock sources (zero network calls). Generation prefers your local Ollama if it's running (best results, fully private); if Ollama isn't reachable, it gracefully falls back to a mock report so this mode *always* produces something, with no setup required.
+  1. Install [Ollama](https://ollama.com) and pull a model: `ollama pull llama3.2`
+  2. Go to **Settings**, enter your Ollama URL (`http://localhost:11434`), click **Test Connection**.
+- **Offline Mode (OFF) = Online** — cloud-first, for when you can't or don't want to run Ollama locally. Retrieval does live DuckDuckGo web search; generation and review use [OpenRouter](https://openrouter.ai)'s cloud API. Requires `OPENROUTER_API_KEY` in `backend/.env` — get a free key at https://openrouter.ai/keys. Defaults to `openrouter/free` (a free-tier model) so it costs nothing unless you set `OPENROUTER_MODEL` to a paid model. Online mode never falls back to mock data — if OpenRouter is unreachable or misconfigured, the run fails with a clear error instead.
 
 ---
 

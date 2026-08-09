@@ -1,10 +1,10 @@
 @echo off
 echo Starting Dvelve Backend...
-cd /d d:\workFiles\ai-automation-web-app\backend
+cd /d d:\workFiles\Dvelve\backend
 start "Dvelve Backend" cmd /k "uvicorn main:app --port 8000 --reload"
 timeout /t 2 /nobreak >nul
 echo Starting Dvelve Frontend...
-cd /d d:\workFiles\ai-automation-web-app\frontend
+cd /d d:\workFiles\Dvelve\frontend
 start "Dvelve Frontend" cmd /k "npm run dev"
 timeout /t 3 /nobreak >nul
 echo.

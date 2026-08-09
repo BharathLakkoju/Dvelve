@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   Search, ChevronDown, Sparkles, ArrowRight,
   Beaker, Leaf, Atom, Rocket, Dna, WifiOff, Wifi,
-  Bot, Zap, BookOpen
+  Bot, Zap, BookOpen, Cloud
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { useSSE } from '../hooks/useSSE'
@@ -58,12 +58,20 @@ export function Dashboard() {
   useEffect(() => {
     // Load sessions
     api.getSessions().then(setSessions).catch(() => {})
-    // Load models
-    api.getModels().then((m) => { if (m.length) setModels(m) }).catch(() => {})
+    // Load models — if the currently selected model isn't actually installed
+    // in this Ollama instance, fall back to the first one that is, so live
+    // research doesn't silently fail with "model not found".
+    api.getModels().then((m) => {
+      if (m.length) {
+        setModels(m)
+        if (!m.includes(selectedModel)) setModel(m[0])
+      }
+    }).catch(() => {})
     // Check Ollama
     api.getOllamaStatus()
       .then((s) => setOllamaConnected(s.available))
       .catch(() => setOllamaConnected(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -145,34 +153,46 @@ export function Dashboard() {
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          {/* Model Engine selector */}
+          {/* Model Engine selector — only meaningful in offline mode (local Ollama).
+              Online mode always uses the server-configured OpenRouter model, so
+              there's nothing for the user to pick. */}
           <div>
             <label className="section-label mb-2 block">Model Engine</label>
-            <div className="relative" ref={dropdownRef}>
-              <button
-                onClick={() => setShowModelDropdown(!showModelDropdown)}
-                className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-gray-200 bg-white hover:border-primary-300 transition-all text-sm font-medium text-gray-700"
+            {offlineMode ? (
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  onClick={() => setShowModelDropdown(!showModelDropdown)}
+                  className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-gray-200 bg-white hover:border-primary-300 transition-all text-sm font-medium text-gray-700"
+                >
+                  <span>{selectedModel}</span>
+                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                </button>
+                {showModelDropdown && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden animate-fade-in">
+                    {models.map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => { setModel(m); setShowModelDropdown(false) }}
+                        className={clsx(
+                          'w-full text-left px-4 py-2.5 text-sm hover:bg-primary-50 transition-colors',
+                          m === selectedModel ? 'text-primary-700 bg-primary-50 font-medium' : 'text-gray-700'
+                        )}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div
+                className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm font-medium text-gray-400 cursor-not-allowed"
+                title="Online mode always uses the server-configured OpenRouter model"
               >
-                <span>{selectedModel}</span>
-                <ChevronDown className="w-4 h-4 text-gray-400" />
-              </button>
-              {showModelDropdown && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden animate-fade-in">
-                  {models.map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => { setModel(m); setShowModelDropdown(false) }}
-                      className={clsx(
-                        'w-full text-left px-4 py-2.5 text-sm hover:bg-primary-50 transition-colors',
-                        m === selectedModel ? 'text-primary-700 bg-primary-50 font-medium' : 'text-gray-700'
-                      )}
-                    >
-                      {m}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+                <span>OpenRouter (cloud)</span>
+                <Cloud className="w-4 h-4 text-gray-300" />
+              </div>
+            )}
           </div>
 
           {/* Research Depth */}

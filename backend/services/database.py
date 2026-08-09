@@ -38,14 +38,21 @@ async def init_db():
                 report_markdown TEXT,
                 sources_json TEXT,
                 critic_score REAL,
+                offline_mode INTEGER,
+                llm_provider TEXT,
                 FOREIGN KEY (user_id) REFERENCES users(id)
             )
         """)
-        # Migrate existing sessions table to add user_id if missing
-        try:
-            await db.execute("ALTER TABLE sessions ADD COLUMN user_id TEXT")
-        except Exception:
-            pass
+        # Migrate existing sessions table to add columns if missing
+        for ddl in (
+            "ALTER TABLE sessions ADD COLUMN user_id TEXT",
+            "ALTER TABLE sessions ADD COLUMN offline_mode INTEGER",
+            "ALTER TABLE sessions ADD COLUMN llm_provider TEXT",
+        ):
+            try:
+                await db.execute(ddl)
+            except Exception:
+                pass
         await db.commit()
 
 
@@ -106,17 +113,20 @@ async def update_session(
     report_markdown: Optional[str] = None,
     sources: Optional[List[SourceChunk]] = None,
     critic_score: Optional[float] = None,
+    offline_mode: Optional[bool] = None,
+    llm_provider: Optional[str] = None,
 ):
     # FIX: Use timezone-aware datetime (utcnow() deprecated since Python 3.12).
     completed_at = datetime.now(timezone.utc).isoformat() if status == "complete" else None
     sources_json = (
         json.dumps([s.model_dump() for s in sources]) if sources else None
     )
+    offline_mode_int = None if offline_mode is None else int(offline_mode)
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(
             """UPDATE sessions SET status=?, completed_at=?, report_markdown=?,
-               sources_json=?, critic_score=? WHERE id=?""",
-            (status, completed_at, report_markdown, sources_json, critic_score, session_id),
+               sources_json=?, critic_score=?, offline_mode=?, llm_provider=? WHERE id=?""",
+            (status, completed_at, report_markdown, sources_json, critic_score, offline_mode_int, llm_provider, session_id),
         )
         await db.commit()
 
@@ -126,13 +136,13 @@ async def get_sessions(user_id: Optional[str] = None) -> List[SessionSummary]:
         db.row_factory = aiosqlite.Row
         if user_id:
             cursor = await db.execute(
-                "SELECT id, query, model, depth, status, created_at, sources_json, critic_score "
+                "SELECT id, query, model, depth, status, created_at, sources_json, critic_score, offline_mode, llm_provider "
                 "FROM sessions WHERE user_id=? ORDER BY created_at DESC LIMIT 50",
                 (user_id,),
             )
         else:
             cursor = await db.execute(
-                "SELECT id, query, model, depth, status, created_at, sources_json, critic_score "
+                "SELECT id, query, model, depth, status, created_at, sources_json, critic_score, offline_mode, llm_provider "
                 "FROM sessions ORDER BY created_at DESC LIMIT 50"
             )
         rows = await cursor.fetchall()
@@ -149,6 +159,8 @@ async def get_sessions(user_id: Optional[str] = None) -> List[SessionSummary]:
                     created_at=datetime.fromisoformat(row["created_at"]),
                     source_count=len(sources),
                     critic_score=row["critic_score"],
+                    offline_mode=None if row["offline_mode"] is None else bool(row["offline_mode"]),
+                    llm_provider=row["llm_provider"],
                 )
             )
         return results
@@ -177,6 +189,8 @@ async def get_session(session_id: str) -> Optional[ResearchSession]:
             report_markdown=row["report_markdown"],
             sources=sources,
             critic_score=row["critic_score"],
+            offline_mode=None if row["offline_mode"] is None else bool(row["offline_mode"]),
+            llm_provider=row["llm_provider"],
         )
 
 

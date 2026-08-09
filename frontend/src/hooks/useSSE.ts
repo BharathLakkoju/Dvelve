@@ -14,6 +14,9 @@ export function useSSE() {
     setCriticResult,
     setCurrentAgentMessage,
     setCurrentSessionId,
+    setEffectiveOffline,
+    setLlmProvider,
+    setResearchError,
   } = useStore()
 
   const startStream = useCallback(
@@ -84,7 +87,9 @@ export function useSSE() {
       case 'status': {
         const agent = data.agent as string
         setCurrentAgentMessage(data.message as string)
-        if (agent) updateAgentState(agent as keyof ReturnType<typeof useStore.getState>['agentStates'], 'thinking')
+        if (typeof data.online === 'boolean') setEffectiveOffline(!data.online)
+        if (typeof data.llm_provider === 'string') setLlmProvider(data.llm_provider as 'mock' | 'ollama' | 'openrouter')
+        if (agent && agent !== 'system') updateAgentState(agent as keyof ReturnType<typeof useStore.getState>['agentStates'], 'thinking')
         break
       }
       case 'planner': {
@@ -137,6 +142,11 @@ export function useSSE() {
       }
       case 'error': {
         console.error('Research error:', data.message)
+        setResearchError((data.message as string) || 'An unexpected error occurred.')
+        const failedStage = data.stage as string | undefined
+        if (failedStage) {
+          updateAgentState(failedStage as keyof ReturnType<typeof useStore.getState>['agentStates'], 'error')
+        }
         break
       }
     }

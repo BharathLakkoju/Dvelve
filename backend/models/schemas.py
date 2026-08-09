@@ -81,6 +81,15 @@ class ResearchSession(BaseModel):
     report_markdown: Optional[str] = None
     sources: Optional[List[SourceChunk]] = None
     critic_score: Optional[float] = None
+    # Whether retrieval stayed local/mock (True) or did live web search (False).
+    # Mirrors the client's requested offline_mode — retrieval always honors it
+    # directly (see research.py). None for sessions created before this field existed.
+    offline_mode: Optional[bool] = None
+    # Which backend actually generated + reviewed this report: "mock" (offline
+    # templates), "ollama" (local, used when offline_mode=True and Ollama was
+    # reachable — falls back to "mock" otherwise), or "openrouter" (cloud,
+    # used whenever offline_mode=False). None for sessions predating this field.
+    llm_provider: Optional[str] = None
 
 
 class SessionSummary(BaseModel):
@@ -92,6 +101,8 @@ class SessionSummary(BaseModel):
     created_at: datetime
     source_count: int = 0
     critic_score: Optional[float] = None
+    offline_mode: Optional[bool] = None
+    llm_provider: Optional[str] = None
 
 
 class OllamaConfig(BaseModel):

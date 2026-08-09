@@ -35,7 +35,12 @@ export interface Session {
   completed_at?: string
   source_count: number
   critic_score?: number
+  offline_mode?: boolean | null
+  llm_provider?: LlmProvider | null
 }
+
+// Which backend actually generated + reviewed a report.
+export type LlmProvider = 'mock' | 'ollama' | 'openrouter'
 
 export interface CriticResult {
   quality_score: number
@@ -76,6 +81,14 @@ interface AppState {
   currentAgentMessage: string
   progress: number // 0-100
   isResearching: boolean
+  // The ACTUAL mode used for the in-progress/last run, confirmed by the backend
+  // (may differ from the `offlineMode` setting if Ollama wasn't reachable).
+  // null until the backend's first status event arrives.
+  effectiveOffline: boolean | null
+  // Which backend is actually generating this run's report: "mock" | "ollama"
+  // | "openrouter". null until the backend's first status event arrives.
+  llmProvider: LlmProvider | null
+  researchError: string | null
 
   // Critic result
   criticResult: CriticResult | null
@@ -93,6 +106,9 @@ interface AppState {
   resetResearch: () => void
   updateAgentState: (agent: keyof AgentState, status: AgentStatus) => void
   setCurrentAgentMessage: (msg: string) => void
+  setEffectiveOffline: (v: boolean) => void
+  setLlmProvider: (p: LlmProvider) => void
+  setResearchError: (msg: string | null) => void
   setSubQuestions: (sqs: SubQuestion[]) => void
   setSources: (sources: Source[]) => void
   appendReportToken: (token: string) => void
@@ -139,6 +155,9 @@ export const useStore = create<AppState>()(
       currentAgentMessage: '',
       progress: 0,
       isResearching: false,
+      effectiveOffline: null,
+      llmProvider: null,
+      researchError: null,
       criticResult: null,
       sessions: [],
 
@@ -157,6 +176,9 @@ export const useStore = create<AppState>()(
         currentAgentMessage: '',
         progress: 0,
         isResearching: true,
+        effectiveOffline: null,
+        llmProvider: null,
+        researchError: null,
         criticResult: null,
         currentSessionId: null,
       }),
@@ -170,6 +192,9 @@ export const useStore = create<AppState>()(
         currentAgentMessage: '',
         progress: 0,
         isResearching: false,
+        effectiveOffline: null,
+        llmProvider: null,
+        researchError: null,
         criticResult: null,
         currentSessionId: null,
       }),
@@ -178,6 +203,9 @@ export const useStore = create<AppState>()(
         set((s) => ({ agentStates: { ...s.agentStates, [agent]: status } })),
 
       setCurrentAgentMessage: (msg) => set({ currentAgentMessage: msg }),
+      setEffectiveOffline: (v) => set({ effectiveOffline: v }),
+      setLlmProvider: (p) => set({ llmProvider: p }),
+      setResearchError: (msg) => set({ researchError: msg, isResearching: false }),
       setSubQuestions: (subQuestions) => set({ subQuestions }),
       setSources: (sources) => set({ sources }),
       appendReportToken: (token) =>
