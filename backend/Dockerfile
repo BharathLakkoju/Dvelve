@@ -1,4 +1,4 @@
-FROM python:3.11-slim-bookworm
+FROM python:3.12-slim-bookworm
 
 # weasyprint (PDF export) needs Cairo/Pango/GDK-Pixbuf at the system level —
 # these aren't installable via pip. See CLAUDE.md: "don't assume it just works
