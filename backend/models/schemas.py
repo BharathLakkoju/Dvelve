@@ -75,7 +75,7 @@ class ResearchSession(BaseModel):
     query: str
     model: str
     depth: str
-    status: str  # pending | running | complete | failed
+    status: str  # pending | running | complete | failed | cancelled
     created_at: datetime
     completed_at: Optional[datetime] = None
     report_markdown: Optional[str] = None

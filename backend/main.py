@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from services.database import init_db
+from services.database import init_db, close_db
 from routers.research import router as research_router
 from routers.sessions import router as sessions_router
 from routers.auth import router as auth_router
@@ -15,6 +15,7 @@ from routers.auth import router as auth_router
 async def lifespan(app: FastAPI):
     await init_db()
     yield
+    await close_db()
 
 
 # FIX: Disable interactive API docs in production to reduce attack surface.

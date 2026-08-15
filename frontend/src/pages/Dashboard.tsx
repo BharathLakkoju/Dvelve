@@ -8,6 +8,7 @@ import {
 import { useStore } from '../store/useStore'
 import { useSSE } from '../hooks/useSSE'
 import { api } from '../lib/api'
+import { parseUtcDate } from '../lib/date'
 import clsx from 'clsx'
 
 const DEPTH_OPTIONS = [
@@ -103,7 +104,7 @@ export function Dashboard() {
   }
 
   const formatDate = (dateStr: string) => {
-    const d = new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z')
+    const d = parseUtcDate(dateStr)
     const now = new Date()
     const diff = (now.getTime() - d.getTime()) / 1000
     if (diff < 3600) return `${Math.round(diff / 60)}m ago`
@@ -116,20 +117,23 @@ export function Dashboard() {
     <div className="max-w-5xl mx-auto px-4 py-12">
       {/* Hero */}
       <div className="text-center mb-10 animate-fade-in">
-        <h1 className="text-4xl font-bold text-gray-900 mb-3">New Research Inquiry</h1>
+        <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary-50 border border-primary-100 rounded-full text-primary-700 text-xs font-semibold mb-4">
+          <Sparkles className="w-3.5 h-3.5" /> New Research Inquiry
+        </div>
+        <h1 className="text-4xl font-extrabold text-gray-900 mb-3 tracking-tight">What should we look into today?</h1>
         <p className="text-gray-500 text-lg">Leverage advanced AI models to synthesize global knowledge and data.</p>
       </div>
 
       {/* Query card */}
-      <div className="card p-6 mb-10 animate-slide-up shadow-md">
+      <div className="card p-6 mb-10 animate-slide-up shadow-elevated border-gray-100/80">
         {/* Search input */}
         <div className="relative mb-5">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
             type="text"
             className="w-full pl-12 pr-4 py-4 text-base rounded-xl border border-gray-200 bg-surface-50
-                       placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500
-                       focus:border-transparent transition-all duration-150"
+                       placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/40
+                       focus:border-primary-300 focus:bg-white transition-all duration-150"
             placeholder="What would you like to research today?"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -245,7 +249,7 @@ export function Dashboard() {
           <button
             onClick={handleBeginResearch}
             disabled={!query.trim() || isStarting}
-            className="btn-primary text-base px-7 py-3 shadow-lg hover:shadow-primary-200 hover:shadow-xl"
+            className="btn-primary text-base px-7 py-3"
           >
             <Sparkles className="w-5 h-5" />
             {isStarting ? 'Starting…' : 'Begin Research Inquiry'}
@@ -279,7 +283,7 @@ export function Dashboard() {
             {sessions.slice(0, 6).map((session) => (
               <div
                 key={session.id}
-                className="card overflow-hidden cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group"
+                className="card card-hover overflow-hidden cursor-pointer group"
                 onClick={() => navigate(`/report/${session.id}`)}
               >
                 {/* Top color block */}

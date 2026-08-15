@@ -14,6 +14,7 @@ venv/
 env/
 pip-wheel-metadata/
 *.pyo
+.pytest_cache/
 
 # ─── Node / Frontend ──────────────────────────────────────────────────────────
 node_modules/

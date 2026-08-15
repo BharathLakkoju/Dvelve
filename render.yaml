@@ -15,6 +15,11 @@ services:
     envVars:
       - key: SECRET_KEY
         sync: false
+      # Neon Postgres connection string (pooled). Required — the backend has
+      # no SQLite fallback, since Render's free tier has no persistent disk
+      # and a local DB file was silently wiped on every restart/redeploy.
+      - key: DATABASE_URL
+        sync: false
       - key: OPENROUTER_API_KEY
         sync: false
       - key: OPENROUTER_MODEL

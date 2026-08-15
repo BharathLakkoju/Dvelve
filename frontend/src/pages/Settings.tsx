@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Server, Shield, Trash2, Download,
+  Server, Shield, Trash2,
   CheckCircle, XCircle, Search, Clock,
   ArrowRight
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import { api } from '../lib/api'
+import { parseUtcDate } from '../lib/date'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import clsx from 'clsx'
 
@@ -20,22 +21,37 @@ export function Settings() {
   const [urlInput, setUrlInput] = useState(ollamaUrl)
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState<{ available: boolean; models: string[] } | null>(null)
-  const [clearingCache, setClearingCache] = useState(false)
   const [saved, setSaved] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false)
 
   useEffect(() => {
     api.getSessions().then(setSessions).catch(() => {})
-  }, [])
+  }, [setSessions])
 
+  // FIX: Test Ollama connectivity directly from the browser instead of
+  // proxying through the backend. Ollama is inherently a local/loopback (or
+  // tunnel) service reachable from the user's own machine — a cloud-deployed
+  // backend testing "localhost" would only ever reach itself, never the
+  // user's Ollama, and always report false regardless of the real state.
+  // Requires the target Ollama instance to allow this origin via
+  // OLLAMA_ORIGINS (see Settings page copy / Instructions.md).
   const handleTestConnection = async () => {
     setTesting(true)
     setTestResult(null)
     try {
-      const result = await api.testOllamaConnection(urlInput)
-      setTestResult(result)
-      setOllamaConnected(result.available)
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 4000)
+      const base = urlInput.trim().replace(/\/+$/, '')
+      const r = await fetch(`${base}/api/tags`, { signal: controller.signal })
+      clearTimeout(timeoutId)
+      if (!r.ok) throw new Error(`Ollama responded ${r.status}`)
+      const data = await r.json()
+      const models: string[] = Array.isArray(data.models)
+        ? data.models.map((m: { name: string }) => m.name)
+        : []
+      setTestResult({ available: true, models })
+      setOllamaConnected(true)
     } catch {
       setTestResult({ available: false, models: [] })
       setOllamaConnected(false)
@@ -50,12 +66,6 @@ export function Settings() {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  const handleClearCache = async () => {
-    setClearingCache(true)
-    await new Promise(r => setTimeout(r, 800))
-    setClearingCache(false)
-  }
-
   const handleDeleteAllSessions = async () => {
     setShowDeleteAllDialog(true)
   }
@@ -67,7 +77,7 @@ export function Settings() {
   }
 
   const formatDate = (dateStr: string) => {
-    const d = new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z')
+    const d = parseUtcDate(dateStr)
     const now = new Date()
     const diff = (now.getTime() - d.getTime()) / 1000
     if (diff < 3600) return `${Math.round(diff / 60)}m ago`
@@ -101,7 +111,7 @@ export function Settings() {
               placeholder="Search sessions..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-gray-200 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:border-primary-300"
             />
           </div>
         </div>
@@ -139,7 +149,7 @@ export function Settings() {
       <div className="flex-1 overflow-y-auto bg-surface-50">
         <div className="max-w-2xl mx-auto px-8 py-8">
           <div className="mb-8">
-            <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+            <h1 className="text-2xl font-extrabold text-gray-900 tracking-tight">Settings</h1>
             <p className="text-gray-500 mt-1">Configure your local AI environment and workspace preferences.</p>
           </div>
 
@@ -170,6 +180,11 @@ export function Settings() {
                   {testing ? 'Testing…' : 'Test Connection'}
                 </button>
               </div>
+              <p className="text-xs text-gray-400 mt-1.5">
+                Tested directly from this browser, not the server — works for a local instance
+                or a tunnel URL (ngrok, Cloudflare Tunnel). Requires Ollama's <code className="text-[11px]">OLLAMA_ORIGINS</code> to
+                include this site's origin.
+              </p>
 
               {testResult && (
                 <div className={clsx(
@@ -179,7 +194,7 @@ export function Settings() {
                   {testResult.available ? (
                     <><CheckCircle className="w-4 h-4" /> Successfully connected to Ollama instance</>
                   ) : (
-                    <><XCircle className="w-4 h-4" /> Could not connect to Ollama instance</>
+                    <><XCircle className="w-4 h-4" /> Could not connect — check the URL, that Ollama is running, and OLLAMA_ORIGINS</>
                   )}
                 </div>
               )}
@@ -232,32 +247,6 @@ export function Settings() {
                   'absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200',
                   offlineMode ? 'translate-x-5' : 'translate-x-0'
                 )} />
-              </button>
-            </div>
-
-            <div className="flex items-center justify-between py-3">
-              <div>
-                <p className="text-sm font-semibold text-gray-800">Storage Management</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <div className="w-28 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-primary-500 rounded-full" style={{ width: '24%' }} />
-                  </div>
-                  <span className="text-xs text-gray-500">2.4 GB / 10 GB used</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-2 mt-2">
-              <button
-                onClick={handleClearCache}
-                disabled={clearingCache}
-                className="btn-secondary text-sm flex-1 justify-center"
-              >
-                <Download className="w-4 h-4" />
-                {clearingCache ? 'Clearing…' : 'Clear Cache'}
-              </button>
-              <button className="btn-secondary text-sm flex-1 justify-center">
-                <Download className="w-4 h-4" /> Export Logs
               </button>
             </div>
           </div>

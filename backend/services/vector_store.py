@@ -6,9 +6,16 @@ Degrades gracefully if chromadb is not installed.
 
 import asyncio
 import hashlib
+import os
 from typing import List
 
 from models.schemas import SourceChunk
+
+# CHROMA_DB_PATH overrides the default relative path to point at a mounted
+# persistent volume. Unlike users/sessions (services/database.py, Postgres),
+# the vector store intentionally stays on local disk and resets on restart —
+# it's a retrieval cache, not source-of-truth data.
+_CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "./chroma_db")
 
 # FIX: chromadb is imported lazily (inside _get_collection, not at module load)
 # because it transitively pulls in onnxruntime/grpc/kubernetes-client/
@@ -33,7 +40,7 @@ def _get_collection():
         _CHROMA_AVAILABLE = False
         return None
     try:
-        _client = chromadb.PersistentClient(path="./chroma_db")
+        _client = chromadb.PersistentClient(path=_CHROMA_DB_PATH)
         _collection = _client.get_or_create_collection(
             name="research_sources",
             embedding_function=DefaultEmbeddingFunction(),

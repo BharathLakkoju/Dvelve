@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 from typing import Optional
+import anyio
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from slowapi import Limiter
@@ -25,13 +26,26 @@ logger = logging.getLogger(__name__)
 limiter = Limiter(key_func=get_remote_address)
 
 
-async def research_event_generator(request: ResearchRequest, session_id: str):
-    """Yields SSE events for the full research pipeline."""
+async def research_event_generator(body: ResearchRequest, session_id: str):
+    """Yields SSE events for the full research pipeline.
+
+    FIX: Cancels cleanly when the client disconnects (e.g. "Stop Research",
+    which now aborts the underlying fetch — see frontend/src/hooks/useSSE.ts).
+    Starlette cancels this generator's task with asyncio.CancelledError as
+    soon as it notices the write to the closed connection fail — NOT via
+    polling Request.is_disconnected(), which was tried first and verified
+    (via a standalone reproduction) to not fire reliably here. The pending
+    Ollama/OpenRouter HTTP call is itself cancelled by this, actually
+    stopping generation rather than just abandoning an already-running one.
+    The DB write marking the session "cancelled" must run inside a shielded
+    cancel scope — an unshielded await in this handler gets cancelled again
+    immediately, before it can complete.
+    """
     report_parts = []
     sources = []
-    # Defaults until determined below — used by the exception handler if the
-    # pipeline fails before mode detection runs.
-    effective_offline = request.offline_mode
+    # Defaults until determined below — used by the cancellation/exception
+    # handling if the pipeline stops before mode detection runs.
+    effective_offline = body.offline_mode
     llm_provider = "mock"
 
     async def emit(event: str, data: dict):
@@ -46,14 +60,14 @@ async def research_event_generator(request: ResearchRequest, session_id: str):
         # always works with zero internet access). False = online (live web
         # retrieval + OpenRouter cloud generation — no silent mock fallback,
         # since the entire point of choosing online is real generation).
-        effective_offline = request.offline_mode
-        if request.offline_mode:
+        effective_offline = body.offline_mode
+        if body.offline_mode:
             ollama_available = await ollama_service.is_available()
             llm_provider = "ollama" if ollama_available else "mock"
         else:
             llm_provider = "openrouter"
 
-        llm_model = request.model if llm_provider == "ollama" else OPENROUTER_DEFAULT_MODEL
+        llm_model = body.model if llm_provider == "ollama" else OPENROUTER_DEFAULT_MODEL
 
         mode_msg = {
             "mock": "Offline mode — Ollama unavailable, using curated sources and a mock report",
@@ -75,7 +89,7 @@ async def research_event_generator(request: ResearchRequest, session_id: str):
         await asyncio.sleep(0.5)
 
         planner_result = await run_planner(
-            request.query, llm_model, request.depth, llm_provider
+            body.query, llm_model, body.depth, llm_provider
         )
         async for chunk in emit("planner", {
             "sub_questions": [sq.model_dump() for sq in planner_result.sub_questions],
@@ -95,7 +109,7 @@ async def research_event_generator(request: ResearchRequest, session_id: str):
         await asyncio.sleep(0.8)
 
         retriever_result = await run_retriever(
-            planner_result.sub_questions, request.query, request.depth, effective_offline
+            planner_result.sub_questions, body.query, body.depth, effective_offline
         )
         async for chunk in emit("retriever", {
             "sources": [s.model_dump() for s in retriever_result.sources],
@@ -111,7 +125,7 @@ async def research_event_generator(request: ResearchRequest, session_id: str):
         await asyncio.sleep(0.3)
 
         ranker_result = await run_ranker(
-            retriever_result.sources, request.model, effective_offline
+            retriever_result.sources, body.model, effective_offline
         )
         async for chunk in emit("ranker", {
             "ranked_count": len(ranker_result.ranked_sources),
@@ -128,12 +142,12 @@ async def research_event_generator(request: ResearchRequest, session_id: str):
         await asyncio.sleep(0.2)
 
         async for token in run_writer_stream(
-            request.query,
+            body.query,
             planner_result.sub_questions,
             sources,
             llm_model,
             llm_provider,
-            request.depth,
+            body.depth,
         ):
             report_parts.append(token)
             payload = json.dumps({"session_id": session_id, "event": "writer", "data": {"token": token}})
@@ -197,6 +211,20 @@ async def research_event_generator(request: ResearchRequest, session_id: str):
         )
         async for chunk in emit("done", {"session_id": session_id, "status": "complete"}):
             yield chunk
+
+    except asyncio.CancelledError:
+        # FIX: The client disconnected (e.g. "Stop Research"). This also
+        # interrupts whatever Ollama/OpenRouter call was in flight, rather
+        # than letting it finish generating a report nobody will see.
+        logger.info("Research session %s cancelled by client", session_id)
+        with anyio.CancelScope(shield=True):
+            await update_session(
+                session_id,
+                status="cancelled",
+                offline_mode=effective_offline,
+                llm_provider=llm_provider,
+            )
+        raise
 
     except Exception as e:
         # FIX: Log the full exception server-side; only send a generic error message

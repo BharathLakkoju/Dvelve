@@ -9,11 +9,19 @@ import {
   Wifi, WifiOff, AlertTriangle
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
-import type { LlmProvider } from '../store/useStore'
+import type { LlmProvider, Source } from '../store/useStore'
 import { useSSE } from '../hooks/useSSE'
 import { api } from '../lib/api'
 import { PROVIDER_LABELS, PROVIDER_TEXT_CLASS } from '../lib/provider'
 import clsx from 'clsx'
+
+interface ReportSessionData {
+  query?: string
+  created_at?: string
+  status?: string
+  critic_score?: number | null
+  llm_provider?: LlmProvider | null
+}
 
 export function Report() {
   const { id } = useParams<{ id: string }>()
@@ -24,9 +32,13 @@ export function Report() {
   } = useStore()
   const { startStream } = useSSE()
 
-  const [session, setSession] = useState<any>(null)
-  const [report, setReport] = useState<string>('')
-  const [sourcesData, setSourcesData] = useState<any[]>([])
+  // Backs only the "fetched from API" path (an existing, already-completed
+  // session being revisited). The "just-finished live session" path never
+  // needs local state at all — it's derived directly from the Zustand store
+  // below, computed during render rather than synced via an effect.
+  const [fetchedSession, setFetchedSession] = useState<ReportSessionData | null>(null)
+  const [fetchedReport, setFetchedReport] = useState<string>('')
+  const [fetchedSources, setFetchedSources] = useState<Source[]>([])
   const [activeSection, setActiveSection] = useState<string>('')
   const [isExportingPdf, setIsExportingPdf] = useState(false)
   const [selectionPopup, setSelectionPopup] = useState<{ text: string; x: number; y: number } | null>(null)
@@ -39,26 +51,22 @@ export function Report() {
   // when it actually belongs to the session being viewed — otherwise a stale
   // report from a previous run would be shown under a different session's title.
   const isLiveSession = currentSessionId === id
+  const hasLiveReport = isLiveSession && !!reportMarkdown && sources.length > 0
 
   useEffect(() => {
-    if (id) {
-      // Try store first (just finished), then fetch from API
-      if (isLiveSession && reportMarkdown && sources.length > 0) {
-        setReport(reportMarkdown)
-        setSourcesData(sources)
-        const found = sessions.find(s => s.id === id)
-        setSession(found || null)
-      } else {
-        api.getSession(id).then((s) => {
-          if (s) {
-            setSession(s)
-            setReport(s.report_markdown || '')
-            setSourcesData(s.sources || [])
-          }
-        }).catch(() => setLoadError(true))
+    if (!id || hasLiveReport) return
+    api.getSession(id).then((s) => {
+      if (s) {
+        setFetchedSession(s)
+        setFetchedReport(s.report_markdown || '')
+        setFetchedSources(s.sources || [])
       }
-    }
-  }, [id])
+    }).catch(() => setLoadError(true))
+  }, [id, hasLiveReport])
+
+  const session = hasLiveReport ? (sessions.find(s => s.id === id) || null) : fetchedSession
+  const report = hasLiveReport ? reportMarkdown : fetchedReport
+  const sourcesData = hasLiveReport ? sources : fetchedSources
 
   // Extract headings for ToC
   const headings = report
@@ -143,7 +151,7 @@ export function Report() {
         <div className="text-center">
           <FileText className="w-12 h-12 text-gray-200 mx-auto mb-3" />
           <p className="text-gray-500">No report found</p>
-          <button onClick={() => navigate('/')} className="btn-primary mt-4">Start Research</button>
+          <button onClick={() => navigate('/dashboard')} className="btn-primary mt-4">Start Research</button>
         </div>
       </div>
     )
@@ -208,7 +216,7 @@ export function Report() {
           </div>
 
           {/* Title */}
-          <h1 className="text-3xl font-bold text-gray-900 leading-tight mb-4">
+          <h1 className="text-3xl font-extrabold text-gray-900 leading-tight tracking-tight mb-4">
             {session?.query || 'Research Report'}
           </h1>
 
@@ -216,7 +224,7 @@ export function Report() {
           <div className="flex items-center gap-4 text-xs text-gray-400 mb-8 pb-6 border-b border-gray-100">
             <span className="flex items-center gap-1">
               <Clock className="w-3.5 h-3.5" />
-              {new Date(session?.created_at || Date.now()).toLocaleDateString()}
+              {session?.created_at ? new Date(session.created_at).toLocaleDateString() : 'Just now'}
             </span>
             <span className="flex items-center gap-1">
               <FileText className="w-3.5 h-3.5" />
@@ -248,8 +256,21 @@ export function Report() {
             </div>
           )}
 
+          {/* Cancelled session banner */}
+          {session?.status === 'cancelled' && (
+            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 rounded-xl p-4 mb-8">
+              <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-amber-700">Research cancelled</p>
+                <p className="text-xs text-amber-600 mt-1 leading-relaxed">
+                  This session was stopped before a report was generated. Start a new research run to try again.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Report markdown */}
-          {report && session?.status !== 'failed' ? (
+          {report && session?.status !== 'failed' && session?.status !== 'cancelled' ? (
             <div className="report-content" onMouseUp={handleMouseUp}>
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
@@ -279,12 +300,18 @@ export function Report() {
                   .trimStart()}
               </ReactMarkdown>
             </div>
-          ) : session?.status === 'complete' || session?.status === 'failed' || loadError ? (
+          ) : session?.status === 'complete' || session?.status === 'failed' || session?.status === 'cancelled' || loadError ? (
             <div className="flex flex-col items-center justify-center py-20 text-center">
               <FileText className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-              <p className="text-gray-500 font-medium">Report content unavailable</p>
-              <p className="text-sm text-gray-400 mt-1">The report could not be generated. Please try running this research again.</p>
-              <button onClick={() => navigate('/')} className="btn-primary mt-4">New Research</button>
+              <p className="text-gray-500 font-medium">
+                {session?.status === 'cancelled' ? 'Research was cancelled' : 'Report content unavailable'}
+              </p>
+              <p className="text-sm text-gray-400 mt-1">
+                {session?.status === 'cancelled'
+                  ? 'No report was generated for this session.'
+                  : 'The report could not be generated. Please try running this research again.'}
+              </p>
+              <button onClick={() => navigate('/dashboard')} className="btn-primary mt-4">New Research</button>
             </div>
           ) : (
             <div className="space-y-3">
@@ -312,7 +339,7 @@ export function Report() {
               href={source.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="block p-3 rounded-xl border border-gray-100 hover:border-primary-100 hover:bg-primary-50/30 transition-all group"
+              className="block p-3 rounded-xl border border-gray-100 hover:border-primary-100 hover:bg-primary-50/30 hover:shadow-soft transition-all group"
             >
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-xs font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
@@ -334,7 +361,7 @@ export function Report() {
 
         {/* Critic score */}
         {session?.status !== 'failed' && (isLiveSession ? criticResult?.quality_score : session?.critic_score) != null && (
-          <div className="mx-3 mb-3 p-3 bg-emerald-50 rounded-xl border border-emerald-100 shrink-0">
+          <div className="mx-3 mb-3 p-3 bg-emerald-50 rounded-xl border border-emerald-100 shrink-0 shadow-soft">
             <p className="text-xs font-semibold text-emerald-700 mb-1">Quality Score</p>
             <div className="flex items-center gap-2">
               <div className="text-2xl font-bold text-emerald-600">
@@ -358,7 +385,7 @@ export function Report() {
       </div>
 
       {/* Bottom action bar (follow-up) */}
-      <div className="fixed bottom-0 left-64 right-64 bg-white border-t border-gray-100 px-6 py-3 flex items-center gap-3">
+      <div className="fixed bottom-0 left-64 right-64 bg-white/90 backdrop-blur-xl border-t border-gray-100 px-6 py-3 flex items-center gap-3 shadow-[0_-4px_16px_-8px_rgba(15,23,42,0.08)]">
         <div className="flex-1 flex items-center gap-2 px-4 py-2 rounded-xl border border-gray-200 bg-surface-50">
           <MessageSquare className="w-4 h-4 text-gray-400" />
           <input

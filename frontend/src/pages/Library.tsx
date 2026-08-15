@@ -8,6 +8,7 @@ import {
 import { useStore } from '../store/useStore'
 import type { LlmProvider } from '../store/useStore'
 import { api } from '../lib/api'
+import { parseUtcDate } from '../lib/date'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { PROVIDER_LABELS, PROVIDER_TEXT_CLASS } from '../lib/provider'
 import clsx from 'clsx'
@@ -40,6 +41,24 @@ function ModeBadge({ llmProvider }: { llmProvider?: LlmProvider | null }) {
   )
 }
 
+const STATUS_META = {
+  failed: { label: 'Failed', className: 'text-red-600 bg-red-50' },
+  cancelled: { label: 'Cancelled', className: 'text-amber-600 bg-amber-50' },
+} as const
+
+function StatusBadge({ status, pill }: { status: string; pill?: boolean }) {
+  const meta = STATUS_META[status as keyof typeof STATUS_META]
+  if (!meta) return null
+  return (
+    <span className={clsx(
+      'flex items-center gap-1 text-xs font-semibold',
+      pill ? clsx(meta.className, 'px-2 py-0.5 rounded-full') : meta.className.split(' ')[0]
+    )}>
+      <AlertTriangle className="w-3 h-3" /> {meta.label}
+    </span>
+  )
+}
+
 export function Library() {
   const navigate = useNavigate()
   const { sessions, setSessions } = useStore()
@@ -50,7 +69,7 @@ export function Library() {
 
   useEffect(() => {
     api.getSessions().then(setSessions).catch(() => {})
-  }, [])
+  }, [setSessions])
 
   const getIcon = (q: string) => {
     const key = Object.keys(TOPIC_COLORS).find(k => q.toLowerCase().includes(k.toLowerCase()))
@@ -71,7 +90,7 @@ export function Library() {
   }
 
   const formatDate = (dateStr: string) => {
-    const d = new Date(dateStr.endsWith('Z') ? dateStr : dateStr + 'Z')
+    const d = parseUtcDate(dateStr)
     const now = new Date()
     const diff = (now.getTime() - d.getTime()) / 1000
     if (diff < 3600) return `${Math.round(diff / 60)}m ago`
@@ -108,10 +127,10 @@ export function Library() {
       />
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Research Library</h1>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Research Library</h1>
           <p className="text-sm text-gray-500 mt-0.5">{sessions.length} research reports</p>
         </div>
-        <button onClick={() => navigate('/')} className="btn-primary text-sm">
+        <button onClick={() => navigate('/dashboard')} className="btn-primary text-sm">
           + New Research
         </button>
       </div>
@@ -164,7 +183,7 @@ export function Library() {
           <p className="text-gray-500 font-medium">
             {sessions.length === 0 ? 'No research reports yet' : 'No reports match your search'}
           </p>
-          <button onClick={() => navigate('/')} className="btn-primary mt-4 mx-auto">
+          <button onClick={() => navigate('/dashboard')} className="btn-primary mt-4 mx-auto">
             Start Your First Research
           </button>
         </div>
@@ -173,7 +192,7 @@ export function Library() {
           {filtered.map((session) => (
             <div
               key={session.id}
-              className="card overflow-hidden cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 group relative"
+              className="card card-hover overflow-hidden cursor-pointer group relative"
               onClick={() => navigate(`/report/${session.id}`)}
             >
               <button
@@ -193,10 +212,8 @@ export function Library() {
                   <span className="text-xs text-gray-400">{formatDate(session.created_at)}</span>
                 </div>
                 <p className="text-sm font-semibold text-gray-800 line-clamp-2 mb-2">{session.query}</p>
-                {session.status === 'failed' && (
-                  <span className="flex items-center gap-1 text-xs font-semibold text-red-600 mb-2">
-                    <AlertTriangle className="w-3 h-3" /> Failed
-                  </span>
+                {(session.status === 'failed' || session.status === 'cancelled') && (
+                  <div className="mb-2"><StatusBadge status={session.status} /></div>
                 )}
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-400">{session.source_count} sources</span>
@@ -234,10 +251,8 @@ export function Library() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {session.status === 'failed' ? (
-                  <span className="flex items-center gap-1 text-xs font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
-                    <AlertTriangle className="w-3 h-3" /> Failed
-                  </span>
+                {session.status === 'failed' || session.status === 'cancelled' ? (
+                  <StatusBadge status={session.status} pill />
                 ) : session.critic_score ? (
                   <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
                     {session.critic_score}/10

@@ -7,10 +7,24 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+// FastAPI returns `detail` as a plain string for most errors, but as an array
+// of Pydantic validation-error objects ({loc, msg, type}) on a 422 — without
+// this, new Error(detail) on an array stringifies to "[object Object],...".
+export function extractErrorMessage(detail: unknown): string {
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    const messages = detail
+      .map((d) => (d && typeof d === 'object' && 'msg' in d ? String((d as { msg: unknown }).msg) : null))
+      .filter((m): m is string => !!m)
+    if (messages.length) return messages.join(', ')
+  }
+  return 'Request failed'
+}
+
 async function handleResponse(r: Response) {
   if (!r.ok) {
     const err = await r.json().catch(() => ({ detail: r.statusText }))
-    throw new Error(err.detail || 'Request failed')
+    throw new Error(extractErrorMessage(err.detail))
   }
   return r.json()
 }
@@ -51,15 +65,6 @@ export const api = {
 
   async getOllamaStatus(): Promise<{ available: boolean; base_url: string }> {
     const r = await fetch(`${API_BASE}/api/ollama/status`, { headers: authHeaders() })
-    return r.json()
-  },
-
-  async testOllamaConnection(url: string): Promise<{ available: boolean; models: string[] }> {
-    const r = await fetch(`${API_BASE}/api/ollama/test`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders() },
-      body: JSON.stringify({ url }),
-    })
     return r.json()
   },
 

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useStore } from '../store/useStore'
 import type { AgentStatus } from '../store/useStore'
+import { useSSE } from '../hooks/useSSE'
 import clsx from 'clsx'
 
 const AGENTS = [
@@ -47,6 +48,7 @@ const PROVIDER_META = {
 
 export function Research() {
   const navigate = useNavigate()
+  const { stopStream } = useSSE()
   const {
     currentQuery, subQuestions, sources, agentStates,
     currentAgentMessage, progress, isResearching,
@@ -55,7 +57,7 @@ export function Research() {
 
   useEffect(() => {
     if (!currentQuery) {
-      navigate('/')
+      navigate('/dashboard')
     }
   }, [currentQuery, navigate])
 
@@ -70,14 +72,19 @@ export function Research() {
   }
 
   const handleStop = () => {
+    // FIX: Actually abort the in-flight fetch (and tell the backend to stop
+    // the pipeline) instead of only resetting local UI state — previously
+    // the backend kept generating the report in the background after
+    // "Stop Research" was clicked.
+    stopStream()
     useStore.getState().resetResearch()
-    navigate('/')
+    navigate('/dashboard')
   }
 
   return (
     <div className="h-[calc(100vh-56px)] flex flex-col overflow-hidden">
       {/* Top bar */}
-      <div className="bg-white border-b border-gray-100 px-6 py-3 flex items-center justify-between shrink-0">
+      <div className="bg-white/80 backdrop-blur-xl border-b border-gray-100 px-6 py-3 flex items-center justify-between shrink-0">
         <div>
           <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Current Research</p>
           <p className="text-sm font-semibold text-gray-800 mt-0.5 max-w-xl truncate">{currentQuery}</p>
@@ -164,7 +171,7 @@ export function Research() {
             </div>
             <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
               <div
-                className="h-full bg-gradient-to-r from-primary-500 to-purple-500 rounded-full transition-all duration-500"
+                className="h-full bg-gradient-to-r from-primary-500 to-accent-500 rounded-full transition-all duration-500"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -244,7 +251,7 @@ export function Research() {
 
             {/* Complete CTA */}
             {isComplete && (
-              <div className="bg-gradient-to-r from-primary-600 to-purple-600 rounded-xl p-5 text-white text-center animate-slide-up">
+              <div className="bg-gradient-to-r from-primary-600 to-accent-600 rounded-2xl p-5 text-white text-center animate-slide-up shadow-elevated">
                 <CheckCircle className="w-8 h-8 mx-auto mb-2" />
                 <p className="font-bold text-lg mb-1">Research Complete!</p>
                 <p className="text-sm text-white/80 mb-3">Your report is ready to view.</p>

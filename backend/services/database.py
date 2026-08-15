@@ -1,20 +1,61 @@
-import aiosqlite
+import asyncpg
 import json
 import os
 import uuid
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+from dotenv import load_dotenv
 from models.schemas import ResearchSession, SessionSummary, SourceChunk, UserResponse
 
-# FIX: Use an absolute path anchored to this file's directory so the DB
-# location is deterministic regardless of the server's working directory.
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "research_sessions.db")
-DB_PATH = os.path.normpath(DB_PATH)
+# This module reads DATABASE_URL at import time (below), and main.py imports
+# it before anything else that happens to call load_dotenv() as a side
+# effect — so .env must be loaded explicitly here, not assumed already loaded.
+load_dotenv()
+
+# FIX: Postgres (Neon) is the persistent store for users/sessions. Render's
+# free plan has no durable disk at all, so the old SQLite file was silently
+# wiped on every restart/redeploy — deleting every registered user and
+# session. There is deliberately no SQLite fallback here: a persistence layer
+# that degrades silently is worse than one that fails loudly at startup.
+_DATABASE_URL_ENV = os.getenv("DATABASE_URL")
+if not _DATABASE_URL_ENV:
+    raise RuntimeError(
+        "DATABASE_URL environment variable is not set. Set it to your Neon "
+        "Postgres connection string — see backend/.env.example."
+    )
+
+
+def _to_asyncpg_dsn(url: str) -> str:
+    """Strip DSN query params asyncpg's connector doesn't understand.
+
+    Neon's connection strings append `channel_binding=require` (a psycopg/libpq
+    SCRAM feature asyncpg doesn't implement) and `sslmode=require`. TLS is
+    requested explicitly via the `ssl` kwarg on connect instead, since
+    asyncpg's own sslmode DSN parsing is inconsistent across versions.
+    """
+    parts = urlsplit(url)
+    query = [(k, v) for k, v in parse_qsl(parts.query) if k not in ("channel_binding", "sslmode")]
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+
+
+DATABASE_URL = _to_asyncpg_dsn(_DATABASE_URL_ENV)
+
+_pool: Optional[asyncpg.Pool] = None
+
+
+async def _get_pool() -> asyncpg.Pool:
+    global _pool
+    if _pool is None:
+        # FIX: Bounded pool size — Neon's free tier caps concurrent connections,
+        # and an unbounded pool from a runaway request burst could exhaust them.
+        _pool = await asyncpg.create_pool(DATABASE_URL, ssl="require", min_size=1, max_size=5)
+    return _pool
 
 
 async def init_db():
-    async with aiosqlite.connect(DB_PATH) as db:
-        # Users table
+    pool = await _get_pool()
+    async with pool.acquire() as db:
         await db.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id TEXT PRIMARY KEY,
@@ -24,11 +65,10 @@ async def init_db():
                 created_at TEXT NOT NULL
             )
         """)
-        # Sessions table
         await db.execute("""
             CREATE TABLE IF NOT EXISTS sessions (
                 id TEXT PRIMARY KEY,
-                user_id TEXT,
+                user_id TEXT REFERENCES users(id),
                 query TEXT NOT NULL,
                 model TEXT NOT NULL,
                 depth TEXT NOT NULL,
@@ -37,73 +77,60 @@ async def init_db():
                 completed_at TEXT,
                 report_markdown TEXT,
                 sources_json TEXT,
-                critic_score REAL,
+                critic_score DOUBLE PRECISION,
                 offline_mode INTEGER,
-                llm_provider TEXT,
-                FOREIGN KEY (user_id) REFERENCES users(id)
+                llm_provider TEXT
             )
         """)
-        # Migrate existing sessions table to add columns if missing
-        for ddl in (
-            "ALTER TABLE sessions ADD COLUMN user_id TEXT",
-            "ALTER TABLE sessions ADD COLUMN offline_mode INTEGER",
-            "ALTER TABLE sessions ADD COLUMN llm_provider TEXT",
-        ):
-            try:
-                await db.execute(ddl)
-            except Exception:
-                pass
-        await db.commit()
+
+
+async def close_db():
+    global _pool
+    if _pool is not None:
+        await _pool.close()
+        _pool = None
 
 
 # ── User CRUD ─────────────────────────────────────────────────────────────────
 
 async def create_user(email: str, username: str, hashed_password: str) -> Dict[str, Any]:
     user_id = str(uuid.uuid4())
-    # FIX: Use timezone-aware datetime (utcnow() deprecated since Python 3.12).
     now = datetime.now(timezone.utc).isoformat()
-    async with aiosqlite.connect(DB_PATH) as db:
+    pool = await _get_pool()
+    async with pool.acquire() as db:
         await db.execute(
-            "INSERT INTO users (id, email, username, hashed_password, created_at) VALUES (?, ?, ?, ?, ?)",
-            (user_id, email, username, hashed_password, now),
+            "INSERT INTO users (id, email, username, hashed_password, created_at) VALUES ($1, $2, $3, $4, $5)",
+            user_id, email, username, hashed_password, now,
         )
-        await db.commit()
     return {"id": user_id, "email": email, "username": username, "created_at": now}
 
 
 async def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute("SELECT * FROM users WHERE email=?", (email,))
-        row = await cursor.fetchone()
-        if not row:
-            return None
-        return dict(row)
+    pool = await _get_pool()
+    async with pool.acquire() as db:
+        row = await db.fetchrow("SELECT * FROM users WHERE email=$1", email)
+        return dict(row) if row else None
 
 
 async def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute("SELECT * FROM users WHERE id=?", (user_id,))
-        row = await cursor.fetchone()
-        if not row:
-            return None
-        return dict(row)
+    pool = await _get_pool()
+    async with pool.acquire() as db:
+        row = await db.fetchrow("SELECT * FROM users WHERE id=$1", user_id)
+        return dict(row) if row else None
 
 
 # ── Session CRUD ──────────────────────────────────────────────────────────────
 
 async def create_session(query: str, model: str, depth: str, user_id: Optional[str] = None) -> str:
     session_id = str(uuid.uuid4())
-    # FIX: Use timezone-aware datetime (utcnow() deprecated since Python 3.12).
     now = datetime.now(timezone.utc).isoformat()
-    async with aiosqlite.connect(DB_PATH) as db:
+    pool = await _get_pool()
+    async with pool.acquire() as db:
         await db.execute(
             """INSERT INTO sessions (id, user_id, query, model, depth, status, created_at)
-               VALUES (?, ?, ?, ?, ?, 'running', ?)""",
-            (session_id, user_id, query, model, depth, now),
+               VALUES ($1, $2, $3, $4, $5, 'running', $6)""",
+            session_id, user_id, query, model, depth, now,
         )
-        await db.commit()
     return session_id
 
 
@@ -116,95 +143,90 @@ async def update_session(
     offline_mode: Optional[bool] = None,
     llm_provider: Optional[str] = None,
 ):
-    # FIX: Use timezone-aware datetime (utcnow() deprecated since Python 3.12).
     completed_at = datetime.now(timezone.utc).isoformat() if status == "complete" else None
     sources_json = (
         json.dumps([s.model_dump() for s in sources]) if sources else None
     )
     offline_mode_int = None if offline_mode is None else int(offline_mode)
-    async with aiosqlite.connect(DB_PATH) as db:
+    pool = await _get_pool()
+    async with pool.acquire() as db:
         await db.execute(
-            """UPDATE sessions SET status=?, completed_at=?, report_markdown=?,
-               sources_json=?, critic_score=?, offline_mode=?, llm_provider=? WHERE id=?""",
-            (status, completed_at, report_markdown, sources_json, critic_score, offline_mode_int, llm_provider, session_id),
+            """UPDATE sessions SET status=$1, completed_at=$2, report_markdown=$3,
+               sources_json=$4, critic_score=$5, offline_mode=$6, llm_provider=$7 WHERE id=$8""",
+            status, completed_at, report_markdown, sources_json, critic_score, offline_mode_int, llm_provider, session_id,
         )
-        await db.commit()
 
 
 async def get_sessions(user_id: Optional[str] = None) -> List[SessionSummary]:
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
+    pool = await _get_pool()
+    async with pool.acquire() as db:
         if user_id:
-            cursor = await db.execute(
+            rows = await db.fetch(
                 "SELECT id, query, model, depth, status, created_at, sources_json, critic_score, offline_mode, llm_provider "
-                "FROM sessions WHERE user_id=? ORDER BY created_at DESC LIMIT 50",
-                (user_id,),
+                "FROM sessions WHERE user_id=$1 ORDER BY created_at DESC LIMIT 50",
+                user_id,
             )
         else:
-            cursor = await db.execute(
+            rows = await db.fetch(
                 "SELECT id, query, model, depth, status, created_at, sources_json, critic_score, offline_mode, llm_provider "
                 "FROM sessions ORDER BY created_at DESC LIMIT 50"
             )
-        rows = await cursor.fetchall()
-        results = []
-        for row in rows:
-            sources = json.loads(row["sources_json"]) if row["sources_json"] else []
-            results.append(
-                SessionSummary(
-                    id=row["id"],
-                    query=row["query"],
-                    model=row["model"],
-                    depth=row["depth"],
-                    status=row["status"],
-                    created_at=datetime.fromisoformat(row["created_at"]),
-                    source_count=len(sources),
-                    critic_score=row["critic_score"],
-                    offline_mode=None if row["offline_mode"] is None else bool(row["offline_mode"]),
-                    llm_provider=row["llm_provider"],
-                )
+    results = []
+    for row in rows:
+        sources = json.loads(row["sources_json"]) if row["sources_json"] else []
+        results.append(
+            SessionSummary(
+                id=row["id"],
+                query=row["query"],
+                model=row["model"],
+                depth=row["depth"],
+                status=row["status"],
+                created_at=datetime.fromisoformat(row["created_at"]),
+                source_count=len(sources),
+                critic_score=row["critic_score"],
+                offline_mode=None if row["offline_mode"] is None else bool(row["offline_mode"]),
+                llm_provider=row["llm_provider"],
             )
-        return results
+        )
+    return results
 
 
 async def get_session(session_id: str) -> Optional[ResearchSession]:
-    async with aiosqlite.connect(DB_PATH) as db:
-        db.row_factory = aiosqlite.Row
-        cursor = await db.execute(
-            "SELECT * FROM sessions WHERE id=?", (session_id,)
-        )
-        row = await cursor.fetchone()
-        if not row:
-            return None
-        sources_data = json.loads(row["sources_json"]) if row["sources_json"] else []
-        sources = [SourceChunk(**s) for s in sources_data]
-        return ResearchSession(
-            id=row["id"],
-            user_id=row["user_id"],  # FIX: expose user_id for ownership checks
-            query=row["query"],
-            model=row["model"],
-            depth=row["depth"],
-            status=row["status"],
-            created_at=datetime.fromisoformat(row["created_at"]),
-            completed_at=datetime.fromisoformat(row["completed_at"]) if row["completed_at"] else None,
-            report_markdown=row["report_markdown"],
-            sources=sources,
-            critic_score=row["critic_score"],
-            offline_mode=None if row["offline_mode"] is None else bool(row["offline_mode"]),
-            llm_provider=row["llm_provider"],
-        )
+    pool = await _get_pool()
+    async with pool.acquire() as db:
+        row = await db.fetchrow("SELECT * FROM sessions WHERE id=$1", session_id)
+    if not row:
+        return None
+    sources_data = json.loads(row["sources_json"]) if row["sources_json"] else []
+    sources = [SourceChunk(**s) for s in sources_data]
+    return ResearchSession(
+        id=row["id"],
+        user_id=row["user_id"],  # FIX: expose user_id for ownership checks
+        query=row["query"],
+        model=row["model"],
+        depth=row["depth"],
+        status=row["status"],
+        created_at=datetime.fromisoformat(row["created_at"]),
+        completed_at=datetime.fromisoformat(row["completed_at"]) if row["completed_at"] else None,
+        report_markdown=row["report_markdown"],
+        sources=sources,
+        critic_score=row["critic_score"],
+        offline_mode=None if row["offline_mode"] is None else bool(row["offline_mode"]),
+        llm_provider=row["llm_provider"],
+    )
 
 
 async def delete_session(session_id: str):
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("DELETE FROM sessions WHERE id=?", (session_id,))
-        await db.commit()
+    pool = await _get_pool()
+    async with pool.acquire() as db:
+        await db.execute("DELETE FROM sessions WHERE id=$1", session_id)
 
 
 # FIX: Scoped deletion — only removes sessions belonging to the given user.
 async def delete_user_sessions(user_id: str):
-    async with aiosqlite.connect(DB_PATH) as db:
-        await db.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
-        await db.commit()
+    pool = await _get_pool()
+    async with pool.acquire() as db:
+        await db.execute("DELETE FROM sessions WHERE user_id=$1", user_id)
 
 # NOTE: delete_all_sessions() was removed — it was a footgun with no live route
 # that would have wiped every user's data if ever accidentally re-exposed.
