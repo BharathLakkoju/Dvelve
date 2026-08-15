@@ -10,23 +10,27 @@ from typing import List
 
 from models.schemas import SourceChunk
 
-try:
-    import chromadb
-    from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
-    _CHROMA_AVAILABLE = True
-except ImportError:
-    _CHROMA_AVAILABLE = False
-
+# FIX: chromadb is imported lazily (inside _get_collection, not at module load)
+# because it transitively pulls in onnxruntime/grpc/kubernetes-client/
+# opentelemetry — slow enough on a CPU-throttled host to blow past deploy
+# port-binding timeouts if incurred at process startup instead of on first use.
+_CHROMA_AVAILABLE = None  # None = not yet determined, True/False after first attempt
 _client = None
 _collection = None
 
 
 def _get_collection():
-    """Lazy initialization of the persistent ChromaDB collection."""
-    global _client, _collection
+    """Lazy import + initialization of the persistent ChromaDB collection."""
+    global _client, _collection, _CHROMA_AVAILABLE
     if _collection is not None:
         return _collection
-    if not _CHROMA_AVAILABLE:
+    if _CHROMA_AVAILABLE is False:
+        return None
+    try:
+        import chromadb
+        from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+    except ImportError:
+        _CHROMA_AVAILABLE = False
         return None
     try:
         _client = chromadb.PersistentClient(path="./chroma_db")
@@ -34,8 +38,10 @@ def _get_collection():
             name="research_sources",
             embedding_function=DefaultEmbeddingFunction(),
         )
+        _CHROMA_AVAILABLE = True
         return _collection
     except Exception:
+        _CHROMA_AVAILABLE = False
         return None
 
 
