@@ -39,9 +39,17 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # FIX: Restrict CORS to only the specific origins, methods and headers the
 # frontend actually uses. Wildcard methods/headers are overly permissive.
+# Origins come from CORS_ORIGINS (comma-separated) so the same allowlist
+# mechanism works in deployed environments; local dev origins remain the
+# default so nothing changes if the env var is unset.
+_default_cors_origins = "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173"
+_cors_origins = [
+    o.strip() for o in os.getenv("CORS_ORIGINS", _default_cors_origins).split(",") if o.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],

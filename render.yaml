@@ -1,0 +1,28 @@
+# Render Blueprint for the Dvelve backend.
+# In the Render dashboard: New -> Blueprint -> select this repo. Render reads
+# this file and pre-fills the service below; you'll be prompted to paste in
+# the `sync: false` secrets from backend/.env (never commit real values here).
+#
+# The frontend is deployed separately to Vercel — see frontend/vercel.json.
+services:
+  - type: web
+    name: dvelve-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: SECRET_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        value: openrouter/free
+      - key: ENABLE_API_DOCS
+        value: "false"
+      # Set this once the Vercel frontend URL is known, e.g.
+      # https://dvelve.vercel.app (no trailing slash). Comma-separate
+      # multiple origins if needed.
+      - key: CORS_ORIGINS
+        sync: false
