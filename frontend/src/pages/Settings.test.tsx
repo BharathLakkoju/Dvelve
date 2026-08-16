@@ -64,4 +64,31 @@ describe('Settings — Ollama Test Connection', () => {
     })
     expect(useStore.getState().ollamaConnected).toBe(false)
   })
+
+  it('shows inline OLLAMA_ORIGINS troubleshooting with the real origin on failure', async () => {
+    // Regression test for the guidance added after a user hit exactly this:
+    // Ollama's own origin check (not just standard CORS) returns 403 for an
+    // unrecognized origin, and the fix (set OLLAMA_ORIGINS, fully restart
+    // Ollama) is non-obvious enough that it needs to be surfaced in the UI,
+    // not just docs — with the actual origin value, not a placeholder.
+    globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('Failed to fetch'))
+
+    renderSettings()
+    fireEvent.click(screen.getByRole('button', { name: /test connection/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/most likely causes/i)).toBeInTheDocument()
+    })
+    expect(screen.getAllByText(/OLLAMA_ORIGINS/).length).toBeGreaterThan(0)
+    // jsdom's default test origin is http://localhost:3000 — the block must
+    // reflect the page's *actual* origin, not a hardcoded example.
+    expect(screen.getByText((_, node) =>
+      node?.textContent === "[System.Environment]::SetEnvironmentVariable('OLLAMA_ORIGINS', 'http://localhost:5173,http://localhost:3000', 'User')"
+    )).toBeInTheDocument()
+  })
+
+  it('does not show the troubleshooting block before a test has run or after success', () => {
+    renderSettings()
+    expect(screen.queryByText(/most likely causes/i)).not.toBeInTheDocument()
+  })
 })

@@ -24,6 +24,28 @@ export function Settings() {
   const [saved, setSaved] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [showDeleteAllDialog, setShowDeleteAllDialog] = useState(false)
+  const [copiedCommand, setCopiedCommand] = useState(false)
+
+  // The exact OLLAMA_ORIGINS value this site needs — computed from the real
+  // origin rather than a generic placeholder, so it's directly copy-pasteable.
+  // Keeps localhost:5173 in the list too: OLLAMA_ORIGINS is a full allowlist
+  // override, not an addition to Ollama's defaults, so setting it to just the
+  // deployed origin would silently break local-dev testing.
+  const suggestedOllamaOrigins = Array.from(
+    new Set(['http://localhost:5173', window.location.origin])
+  ).join(',')
+
+  const handleCopyOllamaOriginsCommand = async () => {
+    const command = `[System.Environment]::SetEnvironmentVariable('OLLAMA_ORIGINS', '${suggestedOllamaOrigins}', 'User')`
+    try {
+      await navigator.clipboard.writeText(command)
+      setCopiedCommand(true)
+      setTimeout(() => setCopiedCommand(false), 2000)
+    } catch {
+      // Clipboard API unavailable (e.g. insecure context) — the command is
+      // still visible and selectable in the <pre> block for manual copy.
+    }
+  }
 
   useEffect(() => {
     api.getSessions().then(setSessions).catch(() => {})
@@ -196,6 +218,42 @@ export function Settings() {
                   ) : (
                     <><XCircle className="w-4 h-4" /> Could not connect — check the URL, that Ollama is running, and OLLAMA_ORIGINS</>
                   )}
+                </div>
+              )}
+
+              {testResult && !testResult.available && (
+                <div className="mt-2 p-3 bg-amber-50 border border-amber-100 rounded-xl text-xs text-amber-800">
+                  <p className="font-semibold mb-1.5">Most likely causes</p>
+                  <ul className="list-disc list-inside space-y-1 mb-2.5">
+                    <li>Ollama isn't running, or the URL/port above is wrong.</li>
+                    <li>
+                      Ollama is rejecting this site's origin — open the browser console (F12); a message like
+                      "blocked by CORS policy" or a <code className="bg-amber-100 px-1 rounded">403</code> on
+                      <code className="bg-amber-100 px-1 rounded">/api/tags</code> confirms this. Ollama checks the
+                      request's origin itself (separate from normal CORS) and rejects anything not explicitly allowed.
+                    </li>
+                  </ul>
+                  <p className="mb-1.5">
+                    Fix: set <code className="bg-amber-100 px-1 rounded">OLLAMA_ORIGINS</code> to include{' '}
+                    <code className="bg-amber-100 px-1 rounded break-all">{suggestedOllamaOrigins}</code>, then{' '}
+                    <span className="font-semibold">fully quit Ollama from its tray icon</span> (closing the window
+                    alone doesn't stop the background process) and relaunch it.
+                  </p>
+                  <div className="flex items-start gap-2">
+                    <pre className="flex-1 bg-amber-100/70 rounded-lg p-2 overflow-x-auto text-[11px] leading-relaxed">
+{`[System.Environment]::SetEnvironmentVariable('OLLAMA_ORIGINS', '${suggestedOllamaOrigins}', 'User')`}
+                    </pre>
+                    <button
+                      onClick={handleCopyOllamaOriginsCommand}
+                      className="btn-secondary text-[11px] px-2 py-1 shrink-0"
+                    >
+                      {copiedCommand ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+                  <p className="mt-1.5 text-amber-600">
+                    (Windows PowerShell — on macOS use <code className="bg-amber-100 px-1 rounded">launchctl setenv OLLAMA_ORIGINS "…"</code>;
+                    on Linux, set it before starting <code className="bg-amber-100 px-1 rounded">ollama serve</code>.)
+                  </p>
                 </div>
               )}
 
