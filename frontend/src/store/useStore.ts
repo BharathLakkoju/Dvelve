@@ -70,6 +70,11 @@ interface AppState {
   offlineMode: boolean
   ollamaUrl: string
   ollamaConnected: boolean
+  // Real models from the last successful client-side probe of ollamaUrl (see
+  // lib/ollama.ts) — the single source of truth for both Settings' and
+  // Dashboard's model pickers, so they can't disagree about what's actually
+  // installed. Empty until a probe succeeds; never a fabricated placeholder.
+  ollamaModels: string[]
 
   // Research in progress
   currentSessionId: string | null
@@ -102,6 +107,7 @@ interface AppState {
   setOfflineMode: (v: boolean) => void
   setOllamaUrl: (url: string) => void
   setOllamaConnected: (v: boolean) => void
+  setOllamaModels: (models: string[]) => void
   startResearch: (query: string) => void
   resetResearch: () => void
   updateAgentState: (agent: keyof AgentState, status: AgentStatus) => void
@@ -145,6 +151,7 @@ export const useStore = create<AppState>()(
       offlineMode: true,
       ollamaUrl: 'http://localhost:11434',
       ollamaConnected: false,
+      ollamaModels: [],
 
       currentSessionId: null,
       currentQuery: '',
@@ -166,6 +173,7 @@ export const useStore = create<AppState>()(
       setOfflineMode: (v) => set({ offlineMode: v }),
       setOllamaUrl: (url) => set({ ollamaUrl: url }),
       setOllamaConnected: (v) => set({ ollamaConnected: v }),
+      setOllamaModels: (models) => set({ ollamaModels: models }),
 
       startResearch: (query) => set({
         currentQuery: query,

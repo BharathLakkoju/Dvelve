@@ -53,6 +53,7 @@ export function Research() {
     currentQuery, subQuestions, sources, agentStates,
     currentAgentMessage, progress, isResearching,
     currentSessionId, criticResult, llmProvider, researchError,
+    ollamaConnected,
   } = useStore()
 
   useEffect(() => {
@@ -66,6 +67,12 @@ export function Research() {
   // llmProvider is null until the backend confirms the mode via the first
   // status event ("mock" | "ollama" | "openrouter").
   const providerMeta = llmProvider ? PROVIDER_META[llmProvider] : null
+  // The backend only ever reports "mock" when offline mode was requested and
+  // *its own* Ollama check failed — if this browser's last check found Ollama
+  // reachable, that's a client/server split (near-certainly the backend is
+  // deployed remotely and can't reach the user's machine), not "no Ollama
+  // installed." Worth calling out distinctly instead of the generic mock badge.
+  const showOllamaMismatchWarning = llmProvider === 'mock' && ollamaConnected
 
   const handleViewReport = () => {
     if (currentSessionId) navigate(`/report/${currentSessionId}`)
@@ -205,6 +212,21 @@ export function Research() {
                 </div>
               </div>
             ))}
+
+            {/* Ollama client/server mismatch warning */}
+            {showOllamaMismatchWarning && (
+              <div className="bg-amber-50 rounded-xl border border-amber-200 p-4 animate-fade-in flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-700">Using mock data, even though this browser can reach Ollama</p>
+                  <p className="text-xs text-amber-600 mt-1 leading-relaxed">
+                    The backend server couldn't reach Ollama itself, so it fell back to mock content. This is
+                    expected if the backend is deployed remotely (e.g. Render) without a tunnel to your machine —
+                    see Settings or Instructions.md for how to set one up so real generation is used instead.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {/* Error banner */}
             {hasError && (

@@ -9,6 +9,7 @@ import { useStore } from '../store/useStore'
 import { useSSE } from '../hooks/useSSE'
 import { api } from '../lib/api'
 import { parseUtcDate } from '../lib/date'
+import { probeOllama } from '../lib/ollama'
 import clsx from 'clsx'
 
 const DEPTH_OPTIONS = [
@@ -45,12 +46,13 @@ export function Dashboard() {
   const navigate = useNavigate()
   const {
     selectedModel, depth, offlineMode,
-    setModel, setDepth, setOfflineMode, setOllamaConnected,
+    setModel, setDepth, setOfflineMode,
+    ollamaUrl, ollamaConnected, setOllamaConnected,
+    ollamaModels, setOllamaModels,
     sessions, setSessions, startResearch,
   } = useStore()
 
   const [query, setQuery] = useState('')
-  const [models, setModels] = useState<string[]>(['llama3:8b', 'mistral:7b', 'gemma2:9b'])
   const [showModelDropdown, setShowModelDropdown] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -59,19 +61,21 @@ export function Dashboard() {
   useEffect(() => {
     // Load sessions
     api.getSessions().then(setSessions).catch(() => {})
-    // Load models — if the currently selected model isn't actually installed
-    // in this Ollama instance, fall back to the first one that is, so live
-    // research doesn't silently fail with "model not found".
-    api.getModels().then((m) => {
-      if (m.length) {
-        setModels(m)
-        if (!m.includes(selectedModel)) setModel(m[0])
+    // FIX: probe Ollama directly from the browser (see lib/ollama.ts) instead
+    // of the old backend-mediated api.getModels()/api.getOllamaStatus() —
+    // those hit the server's own (possibly unreachable, e.g. when deployed)
+    // OLLAMA_BASE_URL and silently fell back to a hardcoded stub model list,
+    // which could disagree with what Settings' client-side test found.
+    probeOllama(ollamaUrl).then(({ available, models }) => {
+      setOllamaConnected(available)
+      setOllamaModels(models)
+      // If the currently selected model isn't actually installed in this
+      // Ollama instance, fall back to the first one that is, so live
+      // research doesn't silently fail with "model not found".
+      if (available && models.length && !models.includes(selectedModel)) {
+        setModel(models[0])
       }
-    }).catch(() => {})
-    // Check Ollama
-    api.getOllamaStatus()
-      .then((s) => setOllamaConnected(s.available))
-      .catch(() => setOllamaConnected(false))
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -163,31 +167,45 @@ export function Dashboard() {
           <div>
             <label className="section-label mb-2 block">Model Engine</label>
             {offlineMode ? (
-              <div className="relative" ref={dropdownRef}>
-                <button
-                  onClick={() => setShowModelDropdown(!showModelDropdown)}
-                  className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-gray-200 bg-white hover:border-primary-300 transition-all text-sm font-medium text-gray-700"
+              ollamaConnected && ollamaModels.length > 0 ? (
+                <div className="relative" ref={dropdownRef}>
+                  <button
+                    onClick={() => setShowModelDropdown(!showModelDropdown)}
+                    className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-gray-200 bg-white hover:border-primary-300 transition-all text-sm font-medium text-gray-700"
+                  >
+                    <span>{selectedModel}</span>
+                    <ChevronDown className="w-4 h-4 text-gray-400" />
+                  </button>
+                  {showModelDropdown && (
+                    <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden animate-fade-in">
+                      {ollamaModels.map((m) => (
+                        <button
+                          key={m}
+                          onClick={() => { setModel(m); setShowModelDropdown(false) }}
+                          className={clsx(
+                            'w-full text-left px-4 py-2.5 text-sm hover:bg-primary-50 transition-colors',
+                            m === selectedModel ? 'text-primary-700 bg-primary-50 font-medium' : 'text-gray-700'
+                          )}
+                        >
+                          {m}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                // FIX: never show a fabricated model list — if Ollama isn't
+                // actually reachable from this browser, say so plainly rather
+                // than offering models that may not exist, since picking one
+                // couldn't produce anything but a mock-fallback report anyway.
+                <div
+                  className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-amber-200 bg-amber-50 text-sm font-medium text-amber-700 cursor-not-allowed"
+                  title="Couldn't reach Ollama from this browser — check Settings, or research will fall back to mock data"
                 >
-                  <span>{selectedModel}</span>
-                  <ChevronDown className="w-4 h-4 text-gray-400" />
-                </button>
-                {showModelDropdown && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden animate-fade-in">
-                    {models.map((m) => (
-                      <button
-                        key={m}
-                        onClick={() => { setModel(m); setShowModelDropdown(false) }}
-                        className={clsx(
-                          'w-full text-left px-4 py-2.5 text-sm hover:bg-primary-50 transition-colors',
-                          m === selectedModel ? 'text-primary-700 bg-primary-50 font-medium' : 'text-gray-700'
-                        )}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+                  <span>Ollama not connected</span>
+                  <WifiOff className="w-4 h-4 text-amber-400" />
+                </div>
+              )
             ) : (
               <div
                 className="w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 text-sm font-medium text-gray-400 cursor-not-allowed"

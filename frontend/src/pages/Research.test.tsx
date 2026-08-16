@@ -79,3 +79,35 @@ describe('Research page — Stop Research', () => {
     expect(navigateMock).toHaveBeenCalledWith('/dashboard')
   })
 })
+
+describe('Research page — Ollama client/server mismatch warning', () => {
+  it('shows the mismatch warning when the server used mock despite this browser having Ollama reachable', () => {
+    // Regression test: the backend only ever reports llmProvider "mock" when
+    // *its own* Ollama reachability check failed. If this browser's last
+    // probe (Settings/Dashboard) found Ollama reachable, that's a client/
+    // server split — most likely a remotely-deployed backend with no tunnel
+    // to the user's machine — and deserves distinct messaging, not the
+    // generic "mock" badge that reads as "you don't have Ollama installed."
+    useStore.getState().startResearch('a research query in progress')
+    useStore.setState({ ollamaConnected: true, llmProvider: 'mock' })
+    renderResearch()
+
+    expect(screen.getByText(/using mock data, even though this browser can reach ollama/i)).toBeInTheDocument()
+  })
+
+  it('does not show the mismatch warning when Ollama was never actually reachable', () => {
+    useStore.getState().startResearch('a research query in progress')
+    useStore.setState({ ollamaConnected: false, llmProvider: 'mock' })
+    renderResearch()
+
+    expect(screen.queryByText(/using mock data, even though this browser can reach ollama/i)).not.toBeInTheDocument()
+  })
+
+  it('does not show the mismatch warning for a real ollama or openrouter run', () => {
+    useStore.getState().startResearch('a research query in progress')
+    useStore.setState({ ollamaConnected: true, llmProvider: 'ollama' })
+    renderResearch()
+
+    expect(screen.queryByText(/using mock data, even though this browser can reach ollama/i)).not.toBeInTheDocument()
+  })
+})

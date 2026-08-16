@@ -8,6 +8,7 @@ import {
 import { useStore } from '../store/useStore'
 import { api } from '../lib/api'
 import { parseUtcDate } from '../lib/date'
+import { probeOllama } from '../lib/ollama'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import clsx from 'clsx'
 
@@ -15,7 +16,7 @@ export function Settings() {
   const navigate = useNavigate()
   const {
     ollamaUrl, setOllamaUrl, offlineMode, setOfflineMode,
-    ollamaConnected, setOllamaConnected, sessions, setSessions,
+    ollamaConnected, setOllamaConnected, ollamaModels, setOllamaModels, sessions, setSessions,
   } = useStore()
 
   const [urlInput, setUrlInput] = useState(ollamaUrl)
@@ -58,28 +59,19 @@ export function Settings() {
   // user's Ollama, and always report false regardless of the real state.
   // Requires the target Ollama instance to allow this origin via
   // OLLAMA_ORIGINS (see Settings page copy / Instructions.md).
+  //
+  // Uses the same lib/ollama.ts probe Dashboard's model picker uses, and
+  // writes the result into the shared store — so a successful test here
+  // immediately updates Dashboard too, instead of each page potentially
+  // disagreeing about what models actually exist.
   const handleTestConnection = async () => {
     setTesting(true)
     setTestResult(null)
-    try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 4000)
-      const base = urlInput.trim().replace(/\/+$/, '')
-      const r = await fetch(`${base}/api/tags`, { signal: controller.signal })
-      clearTimeout(timeoutId)
-      if (!r.ok) throw new Error(`Ollama responded ${r.status}`)
-      const data = await r.json()
-      const models: string[] = Array.isArray(data.models)
-        ? data.models.map((m: { name: string }) => m.name)
-        : []
-      setTestResult({ available: true, models })
-      setOllamaConnected(true)
-    } catch {
-      setTestResult({ available: false, models: [] })
-      setOllamaConnected(false)
-    } finally {
-      setTesting(false)
-    }
+    const result = await probeOllama(urlInput)
+    setTestResult(result)
+    setOllamaConnected(result.available)
+    setOllamaModels(result.models)
+    setTesting(false)
   }
 
   const handleSave = () => {
@@ -264,7 +256,7 @@ export function Settings() {
               )}
             </div>
 
-            {testResult?.available && testResult.models.length > 0 && (
+            {ollamaConnected && ollamaModels.length > 0 && (
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">Default Model Selection</label>
                 <select
@@ -272,7 +264,7 @@ export function Settings() {
                   value={useStore.getState().selectedModel}
                   onChange={(e) => useStore.getState().setModel(e.target.value)}
                 >
-                  {testResult.models.map(m => (
+                  {ollamaModels.map(m => (
                     <option key={m} value={m}>{m}</option>
                   ))}
                 </select>
